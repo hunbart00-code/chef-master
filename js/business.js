@@ -590,7 +590,8 @@ export class Business {
         break;
       case 'sweeping':
         cl.sweepT += dt;
-        if (Math.random() < dt * 10) this.dust(cl.task.trashPos.x, cl.task.trashPos.y);
+        if (Math.random() < dt * 22) this.dust(cl.x + (Math.floor(cl.sweepT / 0.18) % 2 ? -8 : 8), cl.y - 2);
+        if (Math.random() < dt * 6) this.dust(cl.task.trashPos.x, cl.task.trashPos.y);
         if (cl.sweepT >= cl.def.work) {
           this.finishClean(cl.task);
           cl.mode = 'returning';
@@ -1011,7 +1012,11 @@ export class Business {
       return;
     }
     if (a.kind === 'dir4') this.spr(`${a.sheet}_${moving ? a.dir : (a.idleDir || 'front')}`, a.x + shake, a.y + bob);
-    else this.spr(a.sheet, a.x + shake, a.y + bob + (seated ? 2 : 0), a.face < 0);
+    else if (a.mode === 'sweeping') {
+      // 빗자루질: 좌우로 몸을 돌리며 쓱싹쓱싹 (0.18초마다 방향 전환)
+      const k = Math.floor(a.sweepT / 0.18) % 2;
+      this.spr(a.sheet, a.x + (k ? -2 : 2), a.y - (Math.floor(a.sweepT / 0.09) % 2), !!k);
+    } else this.spr(a.sheet, a.x + shake, a.y + bob + (seated ? 2 : 0), a.face < 0);
   }
 
   carry(a) {
@@ -1124,7 +1129,6 @@ export class Business {
       this.px.globalAlpha = 0.45 + 0.3 * (Math.floor(this.clock * 4) % 2);
       this.spr(DISH_PX[c.menuId], c.x, hy - 4);
       this.px.globalAlpha = 1;
-      this.pbar(c.x, hy - 19, 16, this.cookProgress(c), '#ff9a3d'); // 조리 진행 게이지
     } else if (c.state === 'eat') {
       for (let i = 0; i < c.grade; i++) this.spr('star', c.x - 9 + i * 9, hy - 2);
       this.pbar(c.x, hy - 1, 16, c.timer / EAT_TIME, '#5aa8ff');
