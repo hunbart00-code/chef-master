@@ -35,7 +35,6 @@ let chatOff = false;
 export function initLive({ scene, toast, persist, logout }) {
   getScene = scene; toastFn = toast; hooks = { persist, logout };
   bindChat();
-  bindTeacher();
   // 교사 공지는 로그인 전에도 들음
   const startAnn = () => { unsub.announce(); unsub.announce = cloudWatchAnnounce(showAnnounce); cloudWatchServer(applyServer); };
   if (cloudOn()) startAnn(); else setTimeout(() => { if (cloudOn()) startAnn(); }, 2500);
