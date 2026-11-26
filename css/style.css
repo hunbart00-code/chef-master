@@ -569,3 +569,5 @@ html.short #hudTR .chat-btn { min-height: 28px; font-size: 11px; padding: 0 6px;
 #closedOverlay b { color: var(--gold); }
 html.short #tBoard { max-height: 40vh; }
 html.short .t-board { font-size: 11px; }
+
+.g-logo { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: #fff; color: #4285f4; font-weight: 900; align-items: center; justify-content: center; margin-right: 6px; font-family: Arial, sans-serif; }

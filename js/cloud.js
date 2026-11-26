@@ -6,6 +6,9 @@ import { firebaseConfig, isFirebaseEnabled } from './firebase-config.js';
 
 const V = '10.12.2';
 let db = null;
+let appInst = null;
+let auth = null;
+let A = null;
 let F = null;
 const mates = {};          // 반별 친구 가게 캐시
 let saveTimer = null;
@@ -17,7 +20,8 @@ export async function initCloud() {
   try {
     const app = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
     F = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
-    db = F.getFirestore(app.initializeApp(firebaseConfig));
+    appInst = app.initializeApp(firebaseConfig);
+    db = F.getFirestore(appInst);
     return true;
   } catch (e) {
     console.warn('[cloud] Firebase 연결 실패, 이 기기 저장만 사용', e);
@@ -121,14 +125,9 @@ export function cloudWatchChat(ban, cb) {
   const q = F.query(F.collection(db, 'chats', String(ban), 'msgs'), F.orderBy('at', 'desc'), F.limit(40));
   return F.onSnapshot(q, (res) => cb(res.docs.map((d) => ({ id: d.id, ...d.data() })).reverse()), () => {});
 }
-export async function cloudSendChat(ban, msg, teacherPw) {
+export async function cloudSendChat(ban, msg, asTeacher = false) {
   if (!db) throw new Error('offline');
-  const id = rid();
-  if (!teacherPw) return F.setDoc(F.doc(db, 'chats', String(ban), 'msgs', id), { ...msg, teacher: false, at: Date.now() });
-  const b = F.writeBatch(db), op = rid();
-  b.set(F.doc(db, 'auth', op), { pw: teacherPw });
-  b.set(F.doc(db, 'chats', String(ban), 'msgs', id), { ...msg, teacher: true, op, at: Date.now() });
-  return b.commit();
+  return F.setDoc(F.doc(db, 'chats', String(ban), 'msgs', rid()), { ...msg, teacher: !!asTeacher, at: Date.now() });
 }
 
 /** 교사 전체 공지 (세계 확성기) */
@@ -137,30 +136,30 @@ export function cloudWatchAnnounce(cb) {
   const q = F.query(F.collection(db, 'announcements'), F.orderBy('at', 'desc'), F.limit(1));
   return F.onSnapshot(q, (res) => { const d = res.docs[0]; if (d) cb({ id: d.id, ...d.data() }); }, () => {});
 }
-export async function cloudAnnounce(text, by, teacherPw) {
-  const b = F.writeBatch(db), op = rid();
-  b.set(F.doc(db, 'auth', op), { pw: teacherPw });
-  b.set(F.doc(db, 'announcements', rid()), { text, by, op, at: Date.now() });
-  return b.commit();
+export async function cloudAnnounce(text, by) {
+  return F.setDoc(F.doc(db, 'announcements', rid()), { text, by, at: Date.now() });
 }
-/** 교사: 반 통제 (화면 멈춤, 수학 범위) */
-export async function cloudClassControl(ban, patch, teacherPw) {
-  const b = F.writeBatch(db), op = rid();
-  b.set(F.doc(db, 'auth', op), { pw: teacherPw });
-  b.set(F.doc(db, 'classes', String(ban)), { ...patch, op }, { merge: true });
-  return b.commit();
+/** 교사: 반 통제 (화면 멈춤, 채팅 끄기, 수학 범위) */
+export async function cloudClassControl(ban, patch) {
+  return F.setDoc(F.doc(db, 'classes', String(ban)), patch, { merge: true });
 }
-/** 교사 비밀번호 확인 (서버 규칙이 맞을 때만 쓰기 허용) */
-export async function cloudTeacherCheck(teacherPw) {
+
+/** 선생님 구글 로그인 → 선생님 명단(config/admins)에 있는지 확인 */
+export async function cloudTeacherSignIn() {
   if (!db) throw new Error('offline');
-  await F.setDoc(F.doc(db, 'auth', rid()), { pw: teacherPw });
-  return true;
+  if (!A) { A = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`); auth = A.getAuth(appInst); }
+  const provider = new A.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const cred = await A.signInWithPopup(auth, provider);
+  try {
+    await F.getDoc(F.doc(db, 'config', 'admins'));   // 규칙: 명단에 있는 선생님만 읽을 수 있음
+  } catch (e) {
+    await A.signOut(auth);
+    const err = new Error('not-teacher'); err.email = cred.user.email; throw err;
+  }
+  return { email: cred.user.email, name: cred.user.displayName || '' };
 }
-/** 처음 한 번: 교사 비밀번호 등록 (이미 있으면 서버가 거절) */
-export async function cloudTeacherSetup(pwHash) {
-  if (!db) throw new Error('offline');
-  return F.setDoc(F.doc(db, 'config', 'teacher'), { pwHash });
-}
+export async function cloudTeacherSignOut() { if (auth) await A.signOut(auth); }
 
 // ================= 선생님 관리: 서버 열기/닫기 · 코드 초기화 · 학생 현황 =================
 /** 서버 상태 구독 { open, msg } */
@@ -168,18 +167,12 @@ export function cloudWatchServer(cb) {
   if (!db) return () => {};
   return F.onSnapshot(F.doc(db, 'config', 'server'), (snap) => cb(snap.exists() ? snap.data() : { open: true }), () => {});
 }
-export async function cloudSetServer(open, msg, teacherPw) {
-  const b = F.writeBatch(db), op = rid();
-  b.set(F.doc(db, 'auth', op), { pw: teacherPw });
-  b.set(F.doc(db, 'config', 'server'), { open, msg: msg || '', op, at: Date.now() });
-  return b.commit();
+export async function cloudSetServer(open, msg) {
+  return F.setDoc(F.doc(db, 'config', 'server'), { open, msg: msg || '', at: Date.now() });
 }
 /** 학생 4자리 코드 초기화 → 학생이 다음에 입력하는 코드가 새 코드가 됨 */
-export async function cloudResetCode(id, teacherPw) {
-  const b = F.writeBatch(db), op = rid();
-  b.set(F.doc(db, 'auth', op), { pw: teacherPw });
-  b.set(F.doc(db, 'shops', id), { codeHash: null, op }, { merge: true });
-  return b.commit();
+export async function cloudResetCode(id) {
+  return F.setDoc(F.doc(db, 'shops', id), { codeHash: null }, { merge: true });
 }
 /** 선생님용: 반 가게 목록 (코드 해시 제외) */
 export async function cloudClassShops(ban) {

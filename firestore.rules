@@ -1,37 +1,37 @@
 rules_version = '2';
-// 셰프 마스터 Firestore 보안 규칙 (학생은 로그인 없이, 선생님은 비밀번호로)
-// - 가게: 누구나 읽기(친구 방문·랭킹), 이미 있는 가게는 코드 해시가 같아야 덮어쓰기
-// - 방명록: 추가만, 스티커 6종만
-// - 접속 상태·방문: 실시간 표시용 작은 문서
-// - 반 채팅: 60자, 선생님 글은 비밀번호 확인이 같은 쓰기 묶음 안에 있어야 함
-// - 공지·반 통제: 선생님만 (비밀번호의 SHA-256이 config/teacher 와 같아야 함, 비밀번호는 아무도 읽을 수 없음)
+// 셰프 마스터 Firestore 보안 규칙
+// - 학생: 로그인 없이 반·번호·이름·4자리 코드
+// - 선생님: 구글 계정 로그인 + config/admins 문서의 emails 명단에 있어야 함
+//   (명단은 Firebase 콘솔에서만 고칠 수 있고, 게임에서는 아무도 바꿀 수 없음)
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isTeacher() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/config/admins)
+        && request.auth.token.email in get(/databases/$(database)/documents/config/admins).data.emails;
+    }
     function chatOpen(ban) {
       return !exists(/databases/$(database)/documents/classes/$(ban))
         || get(/databases/$(database)/documents/classes/$(ban)).data.get('chatOff', false) != true;
-    }
-    function teacherOp(op) {
-      return op is string
-        && !exists(/databases/$(database)/documents/auth/$(op))
-        && existsAfter(/databases/$(database)/documents/auth/$(op));
     }
 
     match /shops/{id} {
       allow read: if true;
       allow create: if request.resource.data.keys().hasAll(['name', 'ban', 'no', 'codeHash'])
         && id == string(request.resource.data.ban) + '-' + string(request.resource.data.no);
-      // 학생: 같은 코드로만 / 선생님이 코드를 초기화(null)했으면 학생이 새 코드로 한 번 등록 / 선생님 확인이 있으면 초기화 가능
+      // 학생: 같은 코드로만 / 선생님이 코드를 초기화(null)했으면 학생이 새 코드로 한 번 등록 / 선생님은 코드 초기화 가능
       allow update: if resource.data.codeHash == request.resource.data.codeHash
         || (resource.data.codeHash == null && request.resource.data.codeHash is string)
-        || teacherOp(request.resource.data.get('op', null));
-      allow delete: if false;
+        || isTeacher();
+      allow delete: if isTeacher();
     }
     match /guestbooks/{gid} {
       allow read: if true;
       allow create: if request.resource.data.keys().hasOnly(['to', 'from', 'sticker', 'at'])
         && request.resource.data.sticker in ['best', 'yum', 'clean', 'cheer', 'rich', 'again'];
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if isTeacher();
     }
     match /presence/{id} {
       allow read: if true;
@@ -49,38 +49,30 @@ service cloud.firestore {
       allow create: if request.resource.data.text is string
         && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 60
         && request.resource.data.name is string && request.resource.data.name.size() <= 16
-        && ((request.resource.data.teacher == false && chatOpen(ban)) || teacherOp(request.resource.data.get('op', null)));
-      allow update, delete: if false;
+        && ((request.resource.data.teacher == false && chatOpen(ban))
+            || (request.resource.data.teacher == true && isTeacher()));
+      allow update: if false;
+      allow delete: if isTeacher();
     }
     match /announcements/{id} {
       allow read: if true;
-      allow create: if request.resource.data.text is string && request.resource.data.text.size() <= 100
-        && teacherOp(request.resource.data.op);
-      allow update, delete: if false;
+      allow create: if isTeacher() && request.resource.data.text is string && request.resource.data.text.size() <= 100;
+      allow update: if false;
+      allow delete: if isTeacher();
     }
     match /classes/{ban} {
       allow read: if true;
-      allow write: if teacherOp(request.resource.data.op);
+      allow write: if isTeacher();
     }
     // 서버 열기/닫기: 누구나 읽기, 선생님만 바꾸기
     match /config/server {
       allow read: if true;
-      allow write: if teacherOp(request.resource.data.op);
+      allow write: if isTeacher();
     }
-    // 선생님 비밀번호: 처음 한 번만 만들 수 있고, 아무도 읽을 수 없음
-    match /config/teacher {
-      allow read: if false;
-      allow create: if request.resource.data.keys().hasOnly(['pwHash'])
-        && request.resource.data.pwHash is string && request.resource.data.pwHash.size() == 64;
-      allow update, delete: if false;
-    }
-    // 선생님 확인 쪽지: 비밀번호가 맞을 때만 만들어짐, 아무도 읽을 수 없음
-    match /auth/{id} {
-      allow read: if false;
-      allow create: if request.resource.data.keys().hasOnly(['pw'])
-        && hashing.sha256(request.resource.data.pw).toHexString().lower()
-           == get(/databases/$(database)/documents/config/teacher).data.pwHash;
-      allow update, delete: if false;
+    // 선생님 명단: 명단에 있는 선생님만 읽을 수 있고(로그인 확인용), 게임에서는 아무도 못 바꿈 → 콘솔에서만 수정
+    match /config/admins {
+      allow read: if isTeacher();
+      allow write: if false;
     }
   }
 }
