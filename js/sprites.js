@@ -3,6 +3,7 @@
 // - 시트에 없는 캐릭터(손님·사장님·알바)와 튀김·어묵탕은 픽셀 템플릿으로 직접 그리고,
 //   1px 검은 외곽선 + 오른쪽/아래 음영 + 왼쪽 위 하이라이트를 자동으로 넣어 16비트 도트 느낌을 냅니다.
 import { ATLAS_SRC, RECTS } from './sprite-atlas.js';
+import { STAFF_ATLAS_SRC, STAFF_RECTS } from './staff-atlas.js';
 
 const cache = {};
 const urlCache = {};
@@ -11,14 +12,17 @@ const OUTLINE = '#24160f';
 export function getSprite(name) { return cache[name] || null; }
 
 export async function loadSprites() {
-  const img = new Image();
-  img.src = ATLAS_SRC;
-  await img.decode();
-  for (const [name, [x, y, w, h]] of Object.entries(RECTS)) {
-    const c = makeCanvas(w, h);
-    c.getContext('2d').drawImage(img, x, y, w, h, 0, 0, w, h);
-    cache[name] = c;
-  }
+  const load = async (src, rects) => {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    for (const [name, [x, y, w, h]] of Object.entries(rects)) {
+      const c = makeCanvas(w, h);
+      c.getContext('2d').drawImage(img, x, y, w, h, 0, 0, w, h);
+      cache[name] = c;
+    }
+  };
+  await Promise.all([load(ATLAS_SRC, RECTS), load(STAFF_ATLAS_SRC, STAFF_RECTS)]);
   cache.dish_twigim = drawTwigim();
   cache.dish_eomuktang = drawEomuktang();
   try { await document.fonts.load('12px Galmuri11'); } catch (e) { /* 폰트 없이도 동작 */ }

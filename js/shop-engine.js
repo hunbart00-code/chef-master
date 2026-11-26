@@ -1,6 +1,7 @@
 // 가게 상태·경제·저장 엔진 (localStorage 단독 모드, 3차에서 Firestore 연동)
 import { INGREDIENTS, MENUS, BRANCHES, FORECASTS, menuCost } from './data-menus.js';
 import { ITEMS, FRIDGE_LEVELS, DECO_BONUS_CAP } from './data-interior.js';
+import { staffTier } from './data-staff.js';
 
 export const SAVE_KEY = 'chefmaster_shop_v1';
 export const SETTINGS_KEY = 'chefmaster_settings_v1';
@@ -33,7 +34,8 @@ export function newShop(name = '') {
       { type: 'plant_pot', x: 0, y: 0 },
     ],
     inventory: {},
-    staff: [],
+    staff: [],          // [{ role: 'cleaner'|'server'|'guard', tier: 1~4, day: 고용일 }]
+    chefLook: 'chef_m',
     recipes: {},
     rareIngredients: [],
     isBuildingOwner: false,
@@ -52,6 +54,7 @@ export function loadShop() {
       for (const it of s.layout || []) if (it.type === 'lamp') it.type = 'trophy';
       if (s.inventory?.lamp) { s.inventory.trophy = (s.inventory.trophy || 0) + s.inventory.lamp; delete s.inventory.lamp; }
       s.layout = (s.layout || []).filter((it) => ITEMS[it.type]);
+      s.staff = (s.staff || []).filter((x) => staffTier(x.role, x.tier));
       return { ...newShop(), ...s };
     }
   } catch (e) { /* ignore */ }
@@ -205,6 +208,31 @@ export function isBankrupt(state) {
   return !anyCookable(state) && state.money < cheapestMenuCost(state);
 }
 
+// ---------- 종업원 ----------
+export function staffOf(state, role) {
+  const st = state.staff.find((x) => x.role === role);
+  return st ? { ...staffTier(role, st.tier), tier: st.tier, role } : null;
+}
+
+export function totalWages(state) {
+  return state.staff.reduce((s, x) => s + (staffTier(x.role, x.tier)?.wage || 0), 0);
+}
+
+/** 고용(같은 역할 직원이 있으면 교체). 성공 시 true */
+export function hireStaff(state, role, tier) {
+  const t = staffTier(role, tier);
+  if (!t || state.money < t.hire) return false;
+  state.money -= t.hire;
+  state.today.expense += t.hire;
+  state.staff = state.staff.filter((x) => x.role !== role);
+  state.staff.push({ role, tier, day: state.day });
+  return true;
+}
+
+export function fireStaff(state, role) {
+  state.staff = state.staff.filter((x) => x.role !== role);
+}
+
 // ---------- 일일 정산 ----------
 export function newDayStats() {
   return {
@@ -214,7 +242,15 @@ export function newDayStats() {
 }
 
 export function settleDay(state, stats) {
-  const wages = 0; // 2차: 종업원 일당
+  // 종업원 일급 지급 — 돈이 모자라면 일급이 비싼 직원부터 그만둠
+  const quit = [];
+  let wages = totalWages(state);
+  while (wages > state.money && state.staff.length) {
+    const worst = state.staff.slice().sort((a, b) => staffTier(b.role, b.tier).wage - staffTier(a.role, a.tier).wage)[0];
+    state.staff = state.staff.filter((x) => x !== worst);
+    quit.push(staffTier(worst.role, worst.tier).name);
+    wages = totalWages(state);
+  }
   state.money -= wages;
   const expense = state.today.expense;
   const net = stats.revenue + stats.tips - expense - wages;
@@ -237,7 +273,7 @@ export function settleDay(state, stats) {
 
   const result = {
     day: state.day, revenue: stats.revenue, tips: stats.tips, expense, wages, net,
-    oldRating, newRating: state.rating, dayScore, reviews: makeReviews(state, stats),
+    oldRating, newRating: state.rating, dayScore, reviews: makeReviews(state, stats), quit,
   };
   state.history.push({ day: state.day, net, rating: state.rating, served: stats.served, perfect: stats.grades[3] });
   if (state.history.length > 60) state.history.shift();
@@ -271,7 +307,7 @@ function makeReviews(state, s) {
   if (s.noStock > 0) pool.push({ stars: 2, text: `먹고 싶은 메뉴 재료가 다 떨어졌대요. 장 좀 넉넉히 봐 주세요!` });
   if (s.trashSeconds > 40) pool.push({ stars: 2, text: `테이블에 빈 그릇이 쌓여 있었어요. 청소 부탁드려요 🧹` });
   else if (s.served > 3) pool.push({ stars: 5, text: `가게가 깔끔해서 기분 좋게 먹었어요 ✨` });
-  if (s.rowdyHandled > 0) pool.push({ stars: 5, text: `시끄러운 손님을 사장님이 바로 해결해 주셨어요 👍` });
+  if (s.rowdyHandled > 0) pool.push({ stars: 5, text: `시끄러운 손님을 ${state.staff.some((x) => x.role === 'guard') ? '경호원이' : '사장님이'} 바로 해결해 주셨어요 👍` });
   if (s.rowdyIgnored > 0) pool.push({ stars: 1, text: `옆 테이블 진상 손님 때문에 밥맛이 없었어요 😡` });
   if (state.forecast?.id === 'tourists' && s.served > 0) pool.push({ stars: 5, text: `So delicious! I will come back again! 🌏`, eng: true });
   if (state.forecast?.id === 'rain' && s.served > 0) pool.push({ stars: 5, text: `비 오는 날엔 역시 따끈한 국물이죠 ☔` });

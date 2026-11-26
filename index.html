@@ -35,6 +35,12 @@
         </div>
         <div id="titleNew">
           <label class="field">사장님 이름 <input id="inpName" maxlength="10" placeholder="이름을 입력하세요" autocomplete="off"></label>
+          <div class="field">내 셰프 캐릭터
+            <div class="chef-pick" id="chefPick">
+              <button class="chef-opt selected" data-look="chef_m" type="button"></button>
+              <button class="chef-opt" data-look="chef_f" type="button"></button>
+            </div>
+          </div>
           <button class="btn primary big" id="btnNew">가게 열기 🏪</button>
         </div>
         <button class="btn ghost small" id="btnShowNew" hidden>처음부터 새로 시작</button>
@@ -73,6 +79,7 @@
             <button class="tab active" data-tab="ing">🛒 식재료 구매</button>
             <button class="tab" data-tab="layout">🪑 가게 배치</button>
             <button class="tab" data-tab="kitchen">🧊 주방 설비</button>
+            <button class="tab" data-tab="staff">👥 종업원</button>
           </nav>
           <div class="tab-panel active" data-panel="ing">
             <div class="fridge-head">
@@ -94,6 +101,9 @@
           </div>
           <div class="tab-panel" data-panel="kitchen">
             <div id="kitchenPanel"></div>
+          </div>
+          <div class="tab-panel" data-panel="staff">
+            <div id="staffPanel"></div>
           </div>
         </div>
       </div>

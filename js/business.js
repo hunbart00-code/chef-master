@@ -3,7 +3,7 @@
 // 연출: 도로에서 걸어 들어오는 손님, 화구에서 요리 후 직접 서빙하는 사장님, 빗자루 든 청소 알바, 코인·하트 플로팅
 import {
   MENUS, BRANCHES, ITEMS, GRADE, TIP_RATE, tablesOf, branchMenus, canCook, anyCookable,
-  consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won,
+  consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf,
 } from './shop-engine.js';
 import { getSprite, makeCharacter, spriteImg } from './sprites.js';
 import { DISH_SPRITE } from './sprite-atlas.js';
@@ -15,7 +15,8 @@ const BASE_PATIENCE = 32;
 const ROWDY_TIME = 18;
 const CALM_TIME = 1.8;
 const COOK_TIME = 0.9;
-const SWEEP_TIME = 1.1;
+const CHEF_SWEEP_TIME = 1.5;   // 사장님이 직접 치울 때
+const PASS = { x: 395, y: 176 }; // 식기 반납대 = 완성 음식 대기 자리
 const OPEN_HOUR = 11, CLOSE_HOUR = 21;
 const CHAR_SCALE = 3;
 const TABLE_W = 150;
@@ -68,15 +69,20 @@ export class Business {
     this.trees = [-160, 70, 300, 700, 930, 1160].map((x) => ({ x, y: Z.sidewalkBottom - 2 }));
     this.ox = 0;
 
-    // 캐릭터
+    // 캐릭터: 사장님(셰프) + 고용한 종업원
     this.chefHome = { x: 262, y: 170 };
-    this.cleanerHome = { x: 436, y: 168 };
-    this.chef = this.makeActor('chef', this.chefHome);
-    this.chef.tasks = [];
-    this.chef.mode = 'idle';
-    this.cleaner = this.makeActor('cleaner', this.cleanerHome);
-    this.cleaner.tasks = [];
-    this.cleaner.mode = 'idle';
+    this.chef = this.makeStaffActor(this.state.chefLook || 'chef_m', this.chefHome, 230);
+    Object.assign(this.chef, { tasks: [], mode: 'idle', idleDir: 'back' });
+    this.pass = []; // 서빙 담당이 가져갈 완성 요리
+    const cl = staffOf(this.state, 'cleaner');
+    const sv = staffOf(this.state, 'server');
+    const gd = staffOf(this.state, 'guard');
+    this.cleaner = cl ? Object.assign(this.makeStaffActor(cl.id, { x: 470, y: 170 }, cl.speed), { def: cl, home: { x: 470, y: 170 }, mode: 'idle', tasks: [] }) : null;
+    this.server = sv ? Object.assign(this.makeStaffActor(sv.id, { x: 560, y: 192 }, sv.speed), { def: sv, home: { x: 560, y: 192 }, mode: 'idle' }) : null;
+    this.guard = gd ? Object.assign(this.makeStaffActor(gd.id, { x: 410, y: 536 }, gd.speed), { def: gd, home: { x: 410, y: 536 }, mode: 'idle' }) : null;
+    this.patienceMult = sv ? sv.patienceMult : 1;
+    this.staffList = [this.cleaner, this.server, this.guard].filter(Boolean);
+    if (this.staffList.length) this.log(`👥 오늘 근무: ${this.staffList.map((a) => a.def.name).join(', ')}`);
 
     const lines = branchMenus(this.state).map((id) => ({
       name: MENUS[id].name, price: won(menuPrice(this.state, id)), bonus: menuPrice(this.state, id) > MENUS[id].price,
@@ -97,6 +103,10 @@ export class Business {
     this.last = performance.now();
     this.raf = requestAnimationFrame((t) => this.loop(t));
     this.log(`${this.forecast.icon} ${this.forecast.name} — 영업을 시작합니다!`);
+  }
+
+  makeStaffActor(sheet, pos, speed) {
+    return { sheet, x: pos.x, y: pos.y, path: [], speed, t: Math.random() * 10, dir: 'front', robot: /4$/.test(sheet) };
   }
 
   makeActor(kind, pos) {
@@ -193,7 +203,7 @@ export class Business {
     for (const c of this.customers.slice()) this.updateCustomer(c, dt, rowdyActive);
     for (const w of this.walkers.slice()) { this.move(w, dt); if (!w.path.length) this.walkers.splice(this.walkers.indexOf(w), 1); }
     this.updateChef(dt);
-    this.updateCleaner(dt);
+    this.updateStaff(dt);
 
     for (const t of this.tables) if (t.trash) this.stats.trashSeconds += dt;
 
@@ -221,6 +231,8 @@ export class Business {
     const step = a.speed * dt;
     a.moving = true;
     if (Math.abs(tgt.x - a.x) > 1) a.face = tgt.x < a.x ? -1 : 1;
+    const ddx = tgt.x - a.x, ddy = tgt.y - a.y;
+    a.dir = Math.abs(ddx) > Math.abs(ddy) * 0.8 ? (ddx > 0 ? 'right' : 'left') : (ddy > 0 ? 'front' : 'back');
     if (d <= step) { a.x = tgt.x; a.y = tgt.y; a.path.shift(); return !a.path.length; }
     a.x += ((tgt.x - a.x) / d) * step;
     a.y += ((tgt.y - a.y) / d) * step;
@@ -256,7 +268,7 @@ export class Business {
     const free = this.tables.filter((t) => !t.cust && !t.trash);
     if (!free.length) { this.spawnTimer = 2; return; }
 
-    const rowdy = this.state.day >= 2 && Math.random() < 0.12 && !this.customers.some((c) => c.rowdy);
+    const rowdy = this.state.day >= 2 && Math.random() < 0.12 * (this.guard ? this.guard.def.rowdyMult : 1) && !this.customers.some((c) => c.rowdy);
     let menuId = null;
     if (!rowdy) {
       const avail = branchMenus(this.state).filter((m) => canCook(this.state, m));
@@ -299,7 +311,7 @@ export class Business {
         break;
       case 'order':
         c.t += dt;
-        c.patience -= dt * (rowdyActive ? 2.5 : 1);
+        c.patience -= dt * (rowdyActive ? 2.5 : 1) * this.patienceMult;
         if (c.patience <= 0) {
           this.stats.lost++;
           consume(this.state, c.menuId, +1);
@@ -314,7 +326,7 @@ export class Business {
         break;
       case 'rowdy':
         c.t += dt;
-        if (this.busy?.target === c) break;
+        if (this.busy?.target === c || c.handledBy) break;
         c.timer -= dt;
         if (c.timer <= 0) {
           this.stats.rowdyIgnored++;
@@ -334,20 +346,27 @@ export class Business {
     }
   }
 
-  // ---------- 사장님: 화구에서 요리 → 들고 가서 서빙 → 복귀 ----------
+  // ---------- 사장님: 요리(화구) → 서빙 or 반납대, 직접 청소 ----------
   updateChef(dt) {
     const ch = this.chef;
     const arrived = this.move(ch, dt);
     switch (ch.mode) {
       case 'idle':
-        if (ch.tasks.length) {
-          ch.task = ch.tasks.shift();
+        ch.idleDir = dist(ch, this.chefHome) < 3 ? 'back' : 'front';
+        if (!ch.tasks.length) break;
+        ch.task = ch.tasks.shift();
+        if (ch.task.type === 'clean') {
+          const t = ch.task.t;
+          if (!t.trash) { t.reserved = false; break; }
+          ch.mode = 'toTrash';
+          ch.path = [{ x: ch.x, y: Z.hallTop + 14 }, t.sweep];
+        } else {
           ch.mode = 'toStove';
-          ch.path = dist(ch, this.chefHome) > 2 ? [this.chefHome] : [];
+          ch.path = dist(ch, this.chefHome) > 2 ? [{ x: ch.x, y: Z.hallTop + 14 }, this.chefHome] : [];
         }
         break;
       case 'toStove':
-        if (arrived) { ch.mode = 'cooking'; ch.cook = 0; ch.face = 1; }
+        if (arrived) { ch.mode = 'cooking'; ch.cook = 0; ch.idleDir = 'back'; }
         break;
       case 'cooking':
         ch.cook += dt;
@@ -358,10 +377,16 @@ export class Business {
           if (grade === 3) { this.sparkle(pan.x, pan.y, 10); this.sfx?.play('perfect'); }
           else if (grade === 1) { this.smoke(pan.x, pan.y, 10); this.sfx?.play('bad'); }
           else this.sfx?.play('tap');
-          ch.carry = ch.task;
-          ch.mode = 'delivering';
-          const t = ch.task.c.table;
-          ch.path = [{ x: ch.x, y: Z.hallTop + 14 }, { x: t.serve.x, y: Math.min(t.serve.y, Z.hallBottom - 20) }];
+          if (this.server) {
+            // 서빙 담당이 있으면 반납대에 올려 두고 바로 다음 요리
+            this.pass.push(ch.task);
+            ch.mode = 'idle';
+          } else {
+            ch.carry = ch.task;
+            ch.mode = 'delivering';
+            const t = ch.task.c.table;
+            ch.path = [{ x: ch.x, y: Z.hallTop + 14 }, { x: t.serve.x, y: Math.min(t.serve.y, Z.hallBottom - 20) }];
+          }
         }
         break;
       case 'delivering':
@@ -372,44 +397,156 @@ export class Business {
           ch.path = [{ x: ch.x, y: Z.hallTop + 14 }, this.chefHome];
         }
         break;
+      case 'toTrash':
+        if (arrived) { ch.mode = 'sweeping'; ch.sweepT = 0; ch.idleDir = 'right'; }
+        break;
+      case 'sweeping':
+        ch.sweepT += dt;
+        if (Math.random() < dt * 10) this.dust(ch.task.t.trashPos.x, ch.task.t.trashPos.y);
+        if (ch.sweepT >= CHEF_SWEEP_TIME) {
+          this.finishClean(ch.task.t);
+          ch.mode = 'returning';
+          ch.path = [{ x: ch.x, y: Z.hallTop + 14 }, this.chefHome];
+        }
+        break;
       case 'returning':
-        if (arrived) ch.mode = 'idle';
+        if (arrived || ch.tasks.length) ch.mode = 'idle';
         break;
       default: break;
     }
   }
 
-  // ---------- 청소 알바: 빗자루 들고 가서 치우고 복귀 ----------
+  finishClean(t) {
+    t.trash = false; t.reserved = false;
+    this.stats.trashCleaned++;
+    this.sparkle(t.trashPos.x, t.trashPos.y - 20, 5);
+    this.sfx?.play('clean');
+  }
+
+  // ---------- 종업원 AI ----------
+  updateStaff(dt) {
+    this.updateCleaner(dt);
+    this.updateServer(dt);
+    this.updateGuard(dt);
+  }
+
+  // 청소 담당: 쓰레기를 스스로 찾아가 치움
   updateCleaner(dt) {
     const cl = this.cleaner;
+    if (!cl) return;
     const arrived = this.move(cl, dt);
     switch (cl.mode) {
-      case 'idle':
-        if (cl.tasks.length) {
-          cl.task = cl.tasks.shift();
-          if (!cl.task.trash) { cl.task.reserved = false; break; }
-          cl.mode = 'going';
-          cl.path = [{ x: cl.x, y: Z.hallTop + 22 }, cl.task.sweep];
-        }
+      case 'idle': {
+        let t = null;
+        while (cl.tasks.length && !t) { const x = cl.tasks.shift(); if (x.trash && x.reservedBy !== 'chef') t = x; }
+        if (!t) t = this.tables.find((x) => x.trash && !x.reserved);
+        if (!t) break;
+        t.reserved = true; t.reservedBy = 'cleaner';
+        cl.task = t;
+        cl.mode = 'going';
+        cl.path = [{ x: cl.x, y: Z.hallTop + 22 }, t.sweep];
         break;
+      }
       case 'going':
-        if (arrived) { cl.mode = 'sweeping'; cl.sweepT = 0; cl.face = 1; }
+        if (arrived) { cl.mode = 'sweeping'; cl.sweepT = 0; cl.idleDir = 'right'; }
         break;
       case 'sweeping':
         cl.sweepT += dt;
         if (Math.random() < dt * 10) this.dust(cl.task.trashPos.x, cl.task.trashPos.y);
-        if (cl.sweepT >= SWEEP_TIME) {
-          const t = cl.task;
-          t.trash = false; t.reserved = false;
-          this.stats.trashCleaned++;
-          this.sparkle(t.trashPos.x, t.trashPos.y - 20, 5);
-          this.sfx?.play('clean');
+        if (cl.sweepT >= cl.def.work) {
+          this.finishClean(cl.task);
           cl.mode = 'returning';
-          cl.path = [{ x: cl.x, y: Z.hallTop + 22 }, this.cleanerHome];
+          cl.idleDir = 'front';
+          cl.path = [{ x: cl.x, y: Z.hallTop + 22 }, cl.home];
         }
         break;
       case 'returning':
-        if (arrived || cl.tasks.length) cl.mode = 'idle';
+        if (arrived || this.tables.some((x) => x.trash && !x.reserved)) cl.mode = 'idle';
+        break;
+      default: break;
+    }
+  }
+
+  // 서빙 담당: 반납대의 완성 요리를 테이블로 배달
+  updateServer(dt) {
+    const sv = this.server;
+    if (!sv) return;
+    const arrived = this.move(sv, dt);
+    switch (sv.mode) {
+      case 'idle':
+        sv.idleDir = 'front';
+        if (this.pass.length) { sv.mode = 'toPass'; sv.path = [{ x: sv.x, y: Z.hallTop + 18 }, PASS]; }
+        break;
+      case 'toPass':
+        if (arrived) {
+          sv.carry = this.pass.shift();
+          if (!sv.carry) { sv.mode = 'idle'; break; }
+          const t = sv.carry.c.table;
+          sv.mode = 'delivering';
+          sv.path = [{ x: sv.x, y: Z.hallTop + 18 }, { x: t.serve.x, y: Math.min(t.serve.y, Z.hallBottom - 20) }];
+        }
+        break;
+      case 'delivering':
+        if (arrived) {
+          this.serve(sv.carry.c, sv.carry.grade);
+          sv.carry = null;
+          sv.mode = 'returning';
+          sv.path = [{ x: sv.x, y: Z.hallTop + 18 }, sv.home];
+        }
+        break;
+      case 'returning':
+        if (arrived || this.pass.length) sv.mode = 'idle';
+        break;
+      default: break;
+    }
+  }
+
+  // 경호 담당: 진상 손님에게 달려가 퇴치 시도 (성공 확률은 등급별)
+  updateGuard(dt) {
+    const gd = this.guard;
+    if (!gd) return;
+    const arrived = this.move(gd, dt);
+    const target = gd.target;
+    switch (gd.mode) {
+      case 'idle': {
+        gd.idleDir = 'front';
+        const c = this.customers.find((x) => x.state === 'rowdy' && !x.handledBy && this.busy?.target !== x);
+        if (!c) break;
+        c.handledBy = gd;
+        gd.target = c;
+        gd.mode = 'going';
+        gd.path = [{ x: gd.x, y: Math.min(c.table.base + 22, Z.hallBottom - 16) }, { x: c.x + 24, y: Math.min(c.table.base + 22, Z.hallBottom - 16) }];
+        this.log(`🛡️ ${gd.def.name} 출동!`);
+        break;
+      }
+      case 'going':
+        if (!target || target.state !== 'rowdy') { gd.mode = 'returning'; gd.path = [gd.home]; break; }
+        if (arrived) { gd.mode = 'handling'; gd.workT = 0; gd.idleDir = 'back'; }
+        break;
+      case 'handling':
+        if (!target || target.state !== 'rowdy') { gd.mode = 'returning'; gd.path = [gd.home]; break; }
+        gd.workT += dt;
+        if (gd.workT >= gd.def.work) {
+          if (Math.random() < gd.def.success) {
+            this.stats.rowdyHandled++;
+            this.float(target.x, target.y - 84, '퇴치 성공!', '#4fae4a');
+            this.log(`🛡️ ${gd.def.name}: 진상 손님 퇴치 성공!`);
+            this.sfx?.play('clean');
+            target.handledBy = null;
+            this.leave(target, false);
+            gd.target = null;
+            gd.mode = 'returning';
+            gd.path = [gd.home];
+          } else {
+            this.float(target.x, target.y - 84, '실패… 다시!', '#e0533d');
+            this.sfx?.play('wrong');
+            gd.workT = -1.0; // 잠깐 쉬고 재시도
+          }
+        }
+        break;
+      case 'returning':
+        if (arrived) gd.mode = 'idle';
+        else if (this.customers.some((x) => x.state === 'rowdy' && !x.handledBy)) gd.mode = 'idle';
         break;
       default: break;
     }
@@ -447,6 +584,7 @@ export class Business {
       this.busy = {
         label: '진정시키는', total: CALM_TIME, left: CALM_TIME, target: c,
         done: () => {
+          if (c.state !== 'rowdy') return; // 이미 경호원이 처리함
           this.stats.rowdyHandled++;
           this.float(c.x, c.y - 80, '죄송합니다…', '#3d8fe0');
           this.log('🤝 진상 손님을 진정시켜 내보냈어요!');
@@ -457,10 +595,16 @@ export class Business {
   }
 
   clickTrash(t) {
-    if (t.reserved) { this.toast('청소 알바가 치우러 가고 있어요! 🧹'); return; }
-    t.reserved = true;
-    this.cleaner.tasks.push(t);
+    if (this.cleaner) {
+      if (!t.reserved) this.cleaner.tasks.unshift(t);
+      this.toast(`${this.cleaner.def.name}이(가) 곧 치울 거예요! 🧹`);
+      return;
+    }
+    if (t.reserved) { this.toast('사장님이 치우러 가고 있어요! 🧹'); return; }
+    t.reserved = true; t.reservedBy = 'chef';
+    this.chef.tasks.push({ type: 'clean', t });
     this.sfx?.play('tap');
+    if (this.chef.tasks.length > 1 || this.chef.mode !== 'idle') this.toast('사장님 할 일 목록에 청소를 추가했어요.');
   }
 
   cook(c) {
@@ -475,7 +619,7 @@ export class Business {
       const grade = gradeFromCorrect(correct);
       c.state = 'cooked';
       c.grade = grade;
-      this.chef.tasks.push({ c, grade });
+      this.chef.tasks.push({ type: 'cook', c, grade });
     });
   }
 
@@ -497,14 +641,15 @@ export class Business {
   pay(c) {
     const base = menuPrice(this.state, c.menuId);
     const price = Math.round(base * GRADE[c.grade].mult / 10) * 10;
-    const tip = c.grade === 3 ? Math.round(base * TIP_RATE * (this.forecast.tipMult || 1) / 10) * 10 : 0;
+    const tipBonus = 1 + (this.server ? this.server.def.tipBonus : 0);
+    const tip = c.grade === 3 ? Math.round(base * TIP_RATE * (this.forecast.tipMult || 1) * tipBonus / 10) * 10 : 0;
     this.state.money += price + tip;
     this.stats.revenue += price;
     this.stats.tips += tip;
     this.coinFloat(c, price, tip, c.grade);
     this.sfx?.play(c.grade === 1 ? 'bad' : 'coin');
     c.table.dish = null;
-    this.leave(c, Math.random() < 0.8);
+    this.leave(c, Math.random() < 0.8 * (this.cleaner ? this.cleaner.def.trashMult : 1));
   }
 
   leave(c, leaveTrash) {
@@ -571,7 +716,7 @@ export class Business {
     }
     for (const w of this.walkers) items.push({ y: w.y, fn: () => this.drawActor(g, w, false) });
     items.push({ y: this.chef.y, fn: () => this.drawChef(g) });
-    items.push({ y: this.cleaner.y, fn: () => this.drawCleaner(g) });
+    for (const a of this.staffList) items.push({ y: a.y, fn: () => this.drawStaff(g, a) });
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.fn();
 
@@ -602,7 +747,7 @@ export class Business {
       const a = this.clock * 5 + i * 3;
       g.fillRect(t.trashPos.x + Math.cos(a) * 18, t.trashPos.y - 34 + Math.sin(a * 1.3) * 8, 3, 3);
     }
-    if (!t.reserved) this.label(g, t.trashPos.x, t.trashPos.y + 6, '치우기', '#24160f', '#fff');
+    if (!t.reserved && !this.cleaner) this.label(g, t.trashPos.x, t.trashPos.y + 6, '치우기', '#24160f', '#fff');
   }
 
   drawActor(g, a, seated) {
@@ -626,29 +771,49 @@ export class Business {
     g.imageSmoothingEnabled = true;
   }
 
+  // 시트 캐릭터(4방향) 그리기: 이동 중엔 통통 바운스 + 좌우 뒤뚱
+  drawSheet(g, a, work = false) {
+    const dir = a.moving ? a.dir : (a.idleDir || 'front');
+    const s = getSprite(`${a.sheet}_${dir}`) || getSprite(`${a.sheet}_front`);
+    if (!s) return;
+    const h = a.robot ? 62 : 70;
+    const w = (s.width / s.height) * h;
+    let bounce = a.moving ? -Math.abs(Math.sin(a.t * 12)) * 6 : Math.sin(a.t * 2.4) * 0.8;
+    let tilt = a.moving ? Math.sin(a.t * 12) * 0.07 : 0;
+    if (work) { tilt = Math.sin(a.t * 16) * 0.12; bounce = -Math.abs(Math.sin(a.t * 16)) * 2; }
+    g.fillStyle = 'rgba(36,22,15,0.28)';
+    g.beginPath(); g.ellipse(a.x, a.y, w * 0.38, 6, 0, 0, Math.PI * 2); g.fill();
+    g.save();
+    g.translate(a.x, a.y + bounce);
+    g.rotate(tilt);
+    g.drawImage(s, -w / 2, -h, w, h);
+    g.restore();
+  }
+
+  carryDish(g, a, task) {
+    const sp = task.grade === 1 ? 'dish_burnt' : DISH_SPRITE[task.c.menuId];
+    const bounce = a.moving ? -Math.abs(Math.sin(a.t * 12)) * 6 : 0;
+    drawAt(g, sp, a.x, a.y - 70 + bounce, 46);
+  }
+
   drawChef(g) {
     const ch = this.chef;
-    this.drawActor(g, ch, false);
-    if (ch.carry) {
-      const sp = ch.carry.grade === 1 ? 'dish_burnt' : DISH_SPRITE[ch.carry.c.menuId];
-      const bounce = ch.moving ? -Math.abs(Math.sin(ch.t * 14)) * 5 : 0;
-      drawAt(g, sp, ch.x, ch.y - 58 + bounce, 46);
+    const sweeping = ch.mode === 'sweeping';
+    this.drawSheet(g, ch, sweeping || ch.mode === 'cooking');
+    if (ch.carry) this.carryDish(g, ch, ch.carry);
+    if (sweeping) {
+      const s = getSprite(Math.floor(ch.sweepT * 6) % 2 ? 'broom2' : 'broom');
+      if (s) {
+        g.save(); g.translate(ch.x + 18, ch.y - 24); g.rotate(Math.sin(ch.sweepT * 18) * 0.5);
+        g.drawImage(s, -16, -20, 34, 34); g.restore();
+      }
     }
   }
 
-  drawCleaner(g) {
-    const cl = this.cleaner;
-    this.drawActor(g, cl, false);
-    const sweeping = cl.mode === 'sweeping';
-    const ang = sweeping ? Math.sin(cl.sweepT * 18) * 0.5 : -0.25;
-    const bounce = cl.moving ? -Math.abs(Math.sin(cl.t * 14)) * 5 : 0;
-    const s = getSprite(sweeping && Math.floor(cl.sweepT * 6) % 2 ? 'broom2' : 'broom');
-    if (!s) return;
-    g.save();
-    g.translate(cl.x + 16, cl.y - 22 + bounce);
-    g.rotate(ang);
-    g.drawImage(s, -16, -20, 34, 34);
-    g.restore();
+  drawStaff(g, a) {
+    const work = a.mode === 'sweeping' || a.mode === 'handling';
+    this.drawSheet(g, a, work);
+    if (a.carry) this.carryDish(g, a, a.carry);
   }
 
   drawWindow(g) {
@@ -806,10 +971,20 @@ export class Business {
   }
 
   drawChefUI(g) {
+    // 반납대 위 대기 요리
+    this.pass.forEach((task, i) => {
+      const sp = task.grade === 1 ? 'dish_burnt' : DISH_SPRITE[task.c.menuId];
+      drawAt(g, sp, PASS.x - 22 + (i % 3) * 22, 118 - Math.floor(i / 3) * 12, 30);
+    });
+    const gd = this.guard;
+    if (gd?.mode === 'handling' && gd.workT > 0) this.bar(g, gd.x, gd.y - 82, 46, gd.workT / gd.def.work, '#3d8fe0');
+    const cl = this.cleaner;
+    if (cl?.mode === 'sweeping') this.bar(g, cl.x, cl.y - 82, 46, cl.sweepT / cl.def.work, '#4fae4a');
     const ch = this.chef;
-    if (ch.mode === 'cooking') this.bar(g, ch.x, ch.y - 74, 50, ch.cook / COOK_TIME, '#ff9a3d');
+    if (ch.mode === 'sweeping') this.bar(g, ch.x, ch.y - 82, 46, ch.sweepT / CHEF_SWEEP_TIME, '#4fae4a');
+    if (ch.mode === 'cooking') this.bar(g, ch.x, ch.y - 82, 50, ch.cook / COOK_TIME, '#ff9a3d');
     const waiting = ch.tasks.length;
-    if (waiting) this.label(g, ch.x, ch.y - 96, `주문 대기 ${waiting}`, '#3d8fe0', '#fff');
+    if (waiting) this.label(g, ch.x, ch.y - 102, `할 일 ${waiting}`, '#3d8fe0', '#fff');
   }
 
   // ---------- 마감 ----------
@@ -820,6 +995,8 @@ export class Business {
     // 조리·배달 중인 요리는 즉시 서빙 처리 후 결제
     for (const c of this.customers.slice()) if (c.state === 'cooked') this.serve(c, c.grade);
     this.chef.carry = null;
+    if (this.server) this.server.carry = null;
+    this.pass = [];
     for (const c of this.customers.slice()) {
       if (c.state === 'eat') this.pay(c);
       else if (c.menuId && ['enter', 'order'].includes(c.state)) consume(this.state, c.menuId, +1); // 대기 중 손님 재료 반환

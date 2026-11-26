@@ -4,7 +4,9 @@ import {
   fridgeUsed, fridgeFree, buyIngredient, autoShop, upgradeFridge, buyItem, placeItem, pickupItem,
   branchMenus, cookableCount, anyCookable, menuPrice, isBankrupt, settleDay, decoBonus, tablesOf,
   INGREDIENTS, MENUS, BRANCHES, ITEMS, FRIDGE_LEVELS, RESCUE_BASE, RESCUE_PER_CORRECT, won,
+  hireStaff, fireStaff, staffOf, totalWages,
 } from './shop-engine.js';
+import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js';
 import { QuizEngine } from './quiz-engine.js';
 import { QuizUI } from './quiz-ui.js';
 import { Business } from './business.js';
@@ -20,6 +22,7 @@ let state = null;
 let settings = loadSettings();
 let biz = null;
 let layoutSelected = null;
+let chefLook = 'chef_m';
 const engine = new QuizEngine();
 const quiz = new QuizUI($('#quizModal'), engine, () => ({
   branch: state?.branch || 1,
@@ -106,10 +109,16 @@ function initTitle() {
     clearShop();
     engine.reset();
     state = newShop(name);
+    state.chefLook = chefLook;
     persist('새 가게');
     enterPrep();
     $('#helpModal').hidden = false;
   };
+  // 셰프 캐릭터 선택
+  $$('.chef-opt').forEach((b) => {
+    b.innerHTML = `${spriteImg(`${b.dataset.look}_front`, 72)}<span>${b.dataset.look === 'chef_m' ? '남자 셰프' : '여자 셰프'}</span>`;
+    b.onclick = () => { chefLook = b.dataset.look; $$('.chef-opt').forEach((x) => x.classList.toggle('selected', x === b)); };
+  });
   $('#inpName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnNew').click(); });
   $('#selRatio').onchange = (e) => { settings.subjectRatio = e.target.value; saveSettings(settings); };
 }
@@ -145,6 +154,7 @@ function renderPrep() {
   renderIngredients();
   renderLayout();
   renderKitchen();
+  renderStaff();
 }
 
 function renderIngredients() {
@@ -212,7 +222,78 @@ function renderKitchen() {
   };
 }
 
+function renderStaff() {
+  const wages = totalWages(state);
+  let html = `<div class="staff-summary">
+      <span>${spriteImg(`${state.chefLook || 'chef_m'}_front`, 44)}</span>
+      <div><b>${state.name} 사장님</b><p class="small muted">직원이 없는 일은 사장님이 직접 해요. (요리·서빙·청소·진상 진정)</p></div>
+      <div class="wage-total">매일 일급 합계<b>${won(wages)}</b></div>
+    </div>`;
+  for (const role of STAFF_ORDER) {
+    const R = STAFF_ROLES[role];
+    const cur = staffOf(state, role);
+    html += `<section class="staff-role"><h4>${R.icon} ${R.name} <small class="muted">${R.desc}</small></h4><div class="staff-cards">`;
+    R.tiers.forEach((t, i) => {
+      const tier = i + 1;
+      const hired = cur && cur.tier === tier;
+      const sp = speedStars(t.speed);
+      const stats = [`이동 ${'★'.repeat(sp)}${'☆'.repeat(4 - sp)}`];
+      if (role === 'cleaner') {
+        stats.push(`청소 시간 ${t.work}초`);
+        if (t.trashMult < 1) stats.push(`쓰레기 발생 −${Math.round((1 - t.trashMult) * 100)}%`);
+      }
+      if (role === 'server') {
+        stats.push(`손님 인내심 +${Math.round((1 / t.patienceMult - 1) * 100)}%`);
+        if (t.tipBonus) stats.push(`팁 +${Math.round(t.tipBonus * 100)}%`);
+      }
+      if (role === 'guard') {
+        stats.push(`퇴치 확률 <b>${Math.round(t.success * 100)}%</b>`);
+        stats.push(`대응 시간 ${t.work}초`);
+        if (t.rowdyMult < 1) stats.push(`진상 등장 −${Math.round((1 - t.rowdyMult) * 100)}%`);
+      }
+      const canPay = state.money >= t.hire;
+      html += `<div class="staff-card ${hired ? 'hired' : ''} ${t.robot ? 'robot' : ''}">
+        <div class="sc-portrait">${spriteImg(`${t.id}_front`, 76)}</div>
+        <div class="sc-name">${t.name}</div>
+        <div class="sc-line">${t.line}</div>
+        <ul class="sc-stats">${stats.map((x) => `<li>${x}</li>`).join('')}</ul>
+        <div class="sc-price"><span>계약금 <b>${won(t.hire)}</b></span><span>일급 <b>${won(t.wage)}</b>/일</span></div>
+        ${hired
+          ? `<button class="btn small ghost" data-fire="${role}">근무 중 · 해고</button>`
+          : `<button class="btn small ${canPay ? 'primary' : 'disabled'}" data-hire="${role}" data-tier="${tier}" ${canPay ? '' : 'disabled'}>${cur ? '교체 고용' : '고용하기'}</button>`}
+      </div>`;
+    });
+    html += '</div></section>';
+  }
+  $('#staffPanel').innerHTML = html;
+}
+
 function bindPrep() {
+  $('#staffPanel').addEventListener('click', async (e) => {
+    const h = e.target.closest('[data-hire]');
+    const f = e.target.closest('[data-fire]');
+    if (h) {
+      const role = h.dataset.hire, tier = Number(h.dataset.tier);
+      const t = STAFF_ROLES[role].tiers[tier - 1];
+      const cur = staffOf(state, role);
+      const msg = `<b>${t.name}</b>을(를) 고용할까요?<br>계약금 ${won(t.hire)} · 매일 일급 ${won(t.wage)}`
+        + (cur ? `<br><small>지금 일하는 ${cur.name}은(는) 그만둬요.</small>` : '');
+      if (!(await confirmBox(msg))) return;
+      if (!hireStaff(state, role, tier)) { toast('돈이 부족해요! 💸'); return; }
+      sfx.play('bell');
+      toast(`${t.name} 고용 완료! 오늘 영업부터 함께 일해요.`);
+      persist();
+      renderPrep();
+    }
+    if (f) {
+      const cur = staffOf(state, f.dataset.fire);
+      if (!(await confirmBox(`${cur.name}을(를) 해고할까요?<br><small>계약금은 돌려받지 못해요.</small>`))) return;
+      fireStaff(state, f.dataset.fire);
+      persist();
+      renderPrep();
+    }
+  });
+
   $$('.tab').forEach((t) => t.addEventListener('click', () => {
     $$('.tab').forEach((x) => x.classList.toggle('active', x === t));
     $$('.tab-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === t.dataset.tab));
@@ -352,7 +433,7 @@ function showSettlement(stats) {
     <table class="ledger">
       <tr><td>총 매출</td><td class="plus">+${won(r.revenue)}</td></tr>
       <tr><td>팁 💝</td><td class="plus">+${won(r.tips)}</td></tr>
-      <tr><td>재료비·구매비</td><td class="minus">−${won(r.expense)}</td></tr>
+      <tr><td>재료·가구·계약금</td><td class="minus">−${won(r.expense)}</td></tr>
       <tr><td>종업원 일당</td><td class="minus">−${won(r.wages)}</td></tr>
       <tr class="total"><td>순수익</td><td class="${r.net >= 0 ? 'plus' : 'minus'}">${r.net >= 0 ? '+' : '−'}${won(Math.abs(r.net))}</td></tr>
     </table>
@@ -366,6 +447,7 @@ function showSettlement(stats) {
       <div><span>치운 테이블</span><b>${stats.trashCleaned}</b></div>
       <div><span>오늘 정답률</span><b>${acc}%</b></div>
     </div>
+    ${r.quit.length ? `<div class="quit-notice">💸 일급을 줄 돈이 모자라서 <b>${r.quit.join(', ')}</b>이(가) 그만뒀어요.</div>` : ''}
     <div class="rating-change">가게 별점 <b>${r.oldRating.toFixed(2)}</b> → <b class="${diff >= 0 ? 'up' : 'down'}">${r.newRating.toFixed(2)} ${diff >= 0 ? '▲' : '▼'}</b></div>
     <div class="money-now">현재 보유 자금 <b>${won(state.money)}</b></div>`;
   $('#reviewList').innerHTML = r.reviews.map((rv) => `
