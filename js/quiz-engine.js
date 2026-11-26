@@ -1,22 +1,41 @@
-// 퀴즈 엔진: 과목 비중, 중복 방지 큐(최근 15문제), 오답 우선 재출제(wrongQueue), 정답률 통계
-import { generateMath, unitsForBranch } from './math-generator.js';
-import { WORDS, SENTENCES } from './data-english.js';
+// 퀴즈 엔진: 과목 비중, 적응형 난이도(기초→보통→도전), 중복 방지(최근 20문제), 오답 재출제, 정답률 통계
+import { generateMath, UNITS } from './math-g5.js';
+import { WORDS, DIALOGS, SENTENCES, PICTURES } from './data-english-g5.js';
 
 const MEM_KEY = 'chefmaster_quiz_v1';
-const RECENT_MAX = 15;
+const RECENT_MAX = 20;
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const shuffle = (arr) => {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 };
+const canSpeak = () => typeof window !== 'undefined' && 'speechSynthesis' in window;
+export const LEVEL_NAME = { 1: '기초', 2: '보통', 3: '도전' };
+
+// 그림 문장 묶음 펼치기
+const PIC_ITEMS = PICTURES.flatMap((g, gi) => g.items.map(([pic, en], ii) => ({ gi, ii, pic, en, lv: g.lv })));
+// 어순 배열용 문장 (4~7단어)
+const ORDER_SRC = [
+  ...DIALOGS.map((d) => ({ en: d.a, ko: `(${d.ko}) 에 대한 대답`, lv: d.lv })),
+  ...SENTENCES.map((s) => ({ en: s.s.replace('___', s.a), ko: s.ko, lv: s.lv })),
+  ...PIC_ITEMS.map((p) => ({ en: p.en, ko: p.pic, lv: p.lv })),
+].filter((o) => { const n = o.en.split(' ').length; return n >= 3 && n <= 7 && !o.en.includes('—'); });
 
 function loadMem(key = MEM_KEY) {
   try {
     const m = JSON.parse(localStorage.getItem(key));
-    if (m && Array.isArray(m.recent)) return { mathWrong: [], stats: {}, ...m };
+    if (m && Array.isArray(m.recent)) return { mathWrong: [], stats: {}, hist: [], ...m };
   } catch (e) { /* ignore */ }
-  return { recent: [], wrongQueue: [], mathWrong: [], stats: {} };
+  return { recent: [], wrongQueue: [], mathWrong: [], stats: {}, hist: [] };
+}
+
+// 난이도에 맞는 항목 고르기: 지금 단계 70%, 더 쉬운 단계 30%
+function poolByLv(list, lv) {
+  const cur = list.map((x, i) => [x, i]).filter(([x]) => x.lv === lv);
+  const easy = list.map((x, i) => [x, i]).filter(([x]) => x.lv < lv);
+  const src = cur.length && (Math.random() < 0.7 || !easy.length) ? cur : easy.length ? easy : list.map((x, i) => [x, i]);
+  return src;
 }
 
 export class QuizEngine {
@@ -25,125 +44,189 @@ export class QuizEngine {
     this.mem = loadMem();
   }
 
-  // 계정마다 오답 기록·통계를 따로
   useScope(id) {
     this.key = id ? `${MEM_KEY}:${id}` : MEM_KEY;
     this.mem = loadMem(this.key);
   }
 
-  save() {
-    try { localStorage.setItem(this.key, JSON.stringify(this.mem)); } catch (e) { /* ignore */ }
-  }
+  save() { try { localStorage.setItem(this.key, JSON.stringify(this.mem)); } catch (e) { /* ignore */ } }
 
-  reset() {
-    this.mem = { recent: [], wrongQueue: [], mathWrong: [], stats: {} };
-    this.save();
+  reset() { this.mem = { recent: [], wrongQueue: [], mathWrong: [], stats: {}, hist: [] }; this.save(); }
+
+  /**
+   * 난이도: 영업 일수로 기본 단계를 정하고, 최근 정답률로 올리거나 내림
+   * DAY1~2 기초 → DAY3~5 기초·보통 → DAY6~10 보통 → DAY11~ 보통·도전
+   */
+  levelFor(day = 1) {
+    let x = day <= 2 ? 1 : day <= 5 ? 1.5 : day <= 10 ? 2 : 2.5;
+    const h = this.mem.hist || [];
+    if (h.length >= 6) {
+      const acc = h.filter(Boolean).length / h.length;
+      if (acc >= 0.85) x += 0.6; else if (acc >= 0.7) x += 0.25; else if (acc < 0.4) x -= 0.8; else if (acc < 0.55) x -= 0.4;
+    }
+    x = Math.max(1, Math.min(3, x));
+    const lv = Math.floor(x) + (Math.random() < x - Math.floor(x) ? 1 : 0);
+    return Math.max(1, Math.min(3, lv));
   }
 
   /**
-   * @param {object} opt { branch, subjectRatio: '50:50'|'MATH_ONLY'|'ENG_ONLY', engBoost }
+   * @param {object} opt { day, term:'ALL'|'5-1'|'5-2'|단원키, subjectRatio, engBoost }
    */
   next(opt = {}) {
-    const { branch = 1, subjectRatio = '50:50', engBoost = 0 } = opt;
-    let engP = subjectRatio === 'MATH_ONLY' ? 0 : subjectRatio === 'ENG_ONLY' ? 1 : Math.min(0.9, 0.5 + engBoost);
-    const q = Math.random() < engP ? this.makeEnglish() : this.makeMath(branch);
-    this.pushRecent(q.recentKey || q.key);
+    const { day = 1, term = 'ALL', subjectRatio = '50:50', engBoost = 0 } = opt;
+    const engP = subjectRatio === 'MATH_ONLY' ? 0 : subjectRatio === 'ENG_ONLY' ? 1 : Math.min(0.9, 0.5 + engBoost);
+    const lv = this.levelFor(day);
+    let q;
+    for (let i = 0; i < 8; i++) {
+      q = Math.random() < engP ? this.makeEnglish(lv) : this.makeMath(lv, term);
+      if (!this.mem.recent.includes(q.recentKey)) break;
+    }
+    q.lv = lv;
+    q.levelName = LEVEL_NAME[lv];
+    this.mem.recent.push(q.recentKey);
+    if (this.mem.recent.length > RECENT_MAX) this.mem.recent.shift();
     return q;
   }
 
-  pushRecent(key) {
-    this.mem.recent.push(key);
-    if (this.mem.recent.length > RECENT_MAX) this.mem.recent.shift();
-  }
-
   // ---------- 수학 ----------
-  makeMath(branch) {
-    const allowed = unitsForBranch(branch);
-    const weak = this.mem.mathWrong.filter((u) => allowed.includes(u));
-    const force = weak.length && Math.random() < 0.3 ? pick(weak) : undefined;
-    let raw;
-    for (let i = 0; i < 6; i++) {
-      raw = generateMath(branch, force);
-      const sig = `${raw.key}:${raw.prompt}`;
-      if (!this.mem.recent.includes(sig)) break;
-    }
+  makeMath(lv, term) {
+    const weak = this.mem.mathWrong.filter((u) => UNITS[u] && (term === 'ALL' || UNITS[u].term === term || u === term));
+    const unit = weak.length && Math.random() < 0.3 ? pick(weak) : undefined;
+    const raw = generateMath({ term, lv, unit });
     const { choices, answerIdx } = buildChoices(raw.answer, raw.distractors);
     return {
       subject: 'math', type: 'choice', key: raw.key, unit: raw.unit, label: raw.unitName,
-      prompt: raw.prompt, choices, answerIdx, answerText: raw.answer.text, explain: raw.explain,
+      prompt: raw.prompt + (raw.fig ? `<div class="qfig">${raw.fig}</div>` : ''),
+      choices, answerIdx, answerText: raw.answerText || raw.answer.text, explain: raw.explain,
       recentKey: `${raw.key}:${raw.prompt}`,
     };
   }
 
   // ---------- 영어 ----------
-  makeEnglish() {
-    const recent = this.mem.recent;
-    let item = null;
-    // 오답 우선 재출제 (35%)
-    const wq = this.mem.wrongQueue.filter((k) => !recent.slice(-3).includes(k));
-    if (wq.length && Math.random() < 0.35) item = this.itemFromKey(pick(wq));
-    if (!item) {
-      for (let i = 0; i < 20; i++) {
-        const useSentence = Math.random() < 0.34;
-        const cand = useSentence
-          ? { kind: 'S', idx: Math.floor(Math.random() * SENTENCES.length) }
-          : { kind: 'W', idx: Math.floor(Math.random() * WORDS.length) };
-        if (!recent.includes(keyOf(cand))) { item = cand; break; }
-      }
-      if (!item) item = { kind: 'W', idx: Math.floor(Math.random() * WORDS.length) };
-    }
-    return item.kind === 'S' ? this.sentenceQ(item.idx) : this.wordQ(item.idx);
+  makeEnglish(lv) {
+    // 틀린 문제 다시 (30%)
+    const wq = this.mem.wrongQueue.filter((k) => !this.mem.recent.slice(-4).includes(k));
+    if (wq.length && Math.random() < 0.3) { const q = this.fromKey(pick(wq), lv); if (q) return q; }
+    const types = lv === 1
+      ? [['picWord', 22], ['enKo', 16], ['koEn', 12], ['listenWord', 12], ['picSent', 16], ['dialog', 10], ['spell', 8], ['sentence', 4]]
+      : lv === 2
+        ? [['dialog', 18], ['sentence', 16], ['picSent', 12], ['enKo', 8], ['koEn', 8], ['listenSent', 10], ['spell', 12], ['order', 10], ['picWord', 6]]
+        : [['order', 18], ['sentence', 18], ['dialog', 18], ['spell', 14], ['listenSent', 10], ['koEn', 10], ['picSent', 6], ['enKo', 6]];
+    const usable = types.filter(([t]) => canSpeak() || !t.startsWith('listen'));
+    const total = usable.reduce((s, [, w]) => s + w, 0);
+    let r = Math.random() * total, type = usable[0][0];
+    for (const [t, w] of usable) { if ((r -= w) < 0) { type = t; break; } }
+    return this.makeType(type, lv);
   }
 
-  itemFromKey(key) {
-    const [, kind, idxStr] = key.split('_');
+  makeType(type, lv, idx) {
+    switch (type) {
+      case 'enKo': case 'koEn': case 'picWord': case 'listenWord': case 'spell': {
+        let list = WORDS.map((w, i) => [w, i]);
+        if (type === 'picWord') list = list.filter(([w]) => w.pic);
+        if (type === 'spell') list = list.filter(([w]) => /^[a-z]+$/.test(w.en) && w.en.length >= 3 && w.en.length <= (lv === 1 ? 5 : lv === 2 ? 7 : 10));
+        const pool = idx !== undefined ? [[WORDS[idx], idx]] : poolByLvPairs(list, lv);
+        const [, i] = pick(pool);
+        return this.wordQ(i, type);
+      }
+      case 'dialog': return this.dialogQ(idx ?? pick(poolByLv(DIALOGS, lv))[1]);
+      case 'sentence': return this.sentenceQ(idx ?? pick(poolByLv(SENTENCES, lv))[1]);
+      case 'picSent': case 'listenSent': return this.picQ(idx ?? pick(poolByLv(PIC_ITEMS, lv))[1], type);
+      case 'order': return this.orderQ(idx ?? pick(poolByLv(ORDER_SRC, lv))[1]);
+      default: return this.wordQ(0, 'enKo');
+    }
+  }
+
+  fromKey(key, lv) {
+    const [, type, idxStr] = key.split('_');
     const idx = Number(idxStr);
-    if (kind === 'S' && SENTENCES[idx]) return { kind, idx };
-    if (kind === 'W' && WORDS[idx]) return { kind, idx };
-    return null;
+    const map = { W: 'enKo', D: 'dialog', S: 'sentence', P: 'picSent', O: 'order' };
+    if (!map[type] || Number.isNaN(idx)) return null;
+    // 단어는 이번엔 다른 방식으로 (뜻 ↔ 영어 ↔ 스펠링)
+    const t = type === 'W' ? pick(['enKo', 'koEn', 'spell']) : map[type];
+    try { return this.makeType(t, lv, idx); } catch (e) { return null; }
+  }
+
+  wordQ(idx, mode) {
+    const w = WORDS[idx];
+    const key = `E_W_${idx}`;
+    const others = shuffle(WORDS.filter((o) => o.en !== w.en && o.ko !== w.ko && (mode !== 'picWord' || (o.pic && o.pic !== w.pic)))).slice(0, 3);
+    const opts = shuffle([w, ...others]);
+    const base = { subject: 'eng', key, recentKey: key, word: w.en, explain: `${w.pic ? w.pic + ' ' : ''}${w.en} = ${w.ko}` };
+    if (mode === 'spell' && /^[a-z]+$/.test(w.en)) {
+      let letters = shuffle(w.en.split(''));
+      for (let i = 0; i < 6 && letters.join('') === w.en; i++) letters = shuffle(letters);
+      return { ...base, type: 'spell', label: '스펠링 조합', tokens: letters, joiner: '', answerText: w.en,
+        prompt: `${w.pic ? `<div class="pic">${w.pic}</div>` : ''}‘<b>${esc(w.ko)}</b>’을(를) 영어로 써 보세요! <span class="hint">(${w.en.length}글자)</span>` };
+    }
+    if (mode === 'picWord') {
+      return { ...base, type: 'choice', label: '그림 보고 단어 고르기', answerIdx: opts.indexOf(w), answerText: w.en,
+        prompt: `<div class="pic big">${w.pic}</div><div class="hint">그림에 알맞은 영어 단어는?</div>`,
+        choices: opts.map((o) => `<span class="eng">${esc(o.en)}</span>`) };
+    }
+    if (mode === 'listenWord') {
+      const withPic = w.pic && others.every((o) => o.pic);
+      return { ...base, type: 'choice', label: '듣고 고르기', say: w.en, answerIdx: opts.indexOf(w), answerText: `${w.en} (${w.ko})`,
+        prompt: `${sayBtn(w.en)}<div class="hint">잘 듣고 알맞은 ${withPic ? '그림' : '뜻'}을 고르세요.</div>`,
+        choices: opts.map((o) => (withPic ? `<span class="pic">${o.pic}</span>` : esc(o.ko))) };
+    }
+    if (mode === 'koEn') {
+      return { ...base, type: 'choice', label: '우리말 → 영어', answerIdx: opts.indexOf(w), answerText: w.en,
+        prompt: `${w.pic ? `<div class="pic">${w.pic}</div>` : ''}‘<b>${esc(w.ko)}</b>’을(를) 영어로 하면?`,
+        choices: opts.map((o) => `<span class="eng">${esc(o.en)}</span>`) };
+    }
+    return { ...base, type: 'choice', label: '단어 뜻 맞히기', answerIdx: opts.indexOf(w), answerText: w.ko,
+      prompt: `<span class="eng big">${esc(w.en)}</span>${sayBtn(w.en, true)}<div class="hint">이 단어의 뜻은?</div>`,
+      choices: opts.map((o) => esc(o.ko)) };
+  }
+
+  dialogQ(idx) {
+    const d = DIALOGS[idx];
+    const opts = shuffle([d.a, ...d.w]);
+    return {
+      subject: 'eng', type: 'choice', key: `E_D_${idx}`, recentKey: `E_D_${idx}`, label: '알맞은 대답 고르기', word: d.a,
+      prompt: `<div class="dlg"><span class="who">A</span><span class="eng">${esc(d.q)}</span>${sayBtn(d.q, true)}</div><div class="dlg"><span class="who b">B</span><span class="eng">________</span></div><div class="hint">💬 ${esc(d.ko)}</div>`,
+      choices: opts.map((o) => `<span class="eng">${esc(o)}</span>`), answerIdx: opts.indexOf(d.a),
+      answerText: d.a, explain: `A: ${d.q} → B: ${d.a}`,
+    };
   }
 
   sentenceQ(idx) {
     const s = SENTENCES[idx];
     const opts = shuffle([s.a, ...s.w]);
     return {
-      subject: 'eng', type: 'choice', key: `E_S_${idx}`, label: '빈칸 문장 완성', word: s.a,
-      prompt: `<span class="eng">${escapeHtml(s.s).replace('___', '<u>&nbsp;?&nbsp;</u>')}</span><div class="hint">💬 ${escapeHtml(s.ko)}</div>`,
-      choices: opts.map((o) => `<span class="eng">${escapeHtml(o)}</span>`), answerIdx: opts.indexOf(s.a),
+      subject: 'eng', type: 'choice', key: `E_S_${idx}`, recentKey: `E_S_${idx}`, label: '빈칸 문장 완성', word: s.a,
+      prompt: `<span class="eng">${esc(s.s).replace('___', '<u>&nbsp;?&nbsp;</u>')}</span><div class="hint">💬 ${esc(s.ko)}</div>`,
+      choices: opts.map((o) => `<span class="eng">${esc(o)}</span>`), answerIdx: opts.indexOf(s.a),
       answerText: s.a, explain: `${s.s.replace('___', s.a)} — ${s.ko}`,
     };
   }
 
-  wordQ(idx) {
-    const w = WORDS[idx];
-    const key = `E_W_${idx}`;
-    const r = Math.random();
-    const canSpell = /^[a-z]{3,9}$/.test(w.en);
-    if (canSpell && r < 0.33) {
-      let letters = shuffle(w.en.split(''));
-      for (let i = 0; i < 5 && letters.join('') === w.en; i++) letters = shuffle(letters);
-      return {
-        subject: 'eng', type: 'spell', key, label: '스펠링 조합', word: w.en,
-        prompt: `‘<b>${escapeHtml(w.ko)}</b>’을(를) 영어로 써 보세요! <span class="hint">(${w.en.length}글자)</span>`,
-        letters, answerText: w.en, explain: `${w.ko} = ${w.en}`,
-      };
+  picQ(idx, mode) {
+    const p = PIC_ITEMS[idx];
+    const group = PICTURES[p.gi].items.map(([pic, en]) => ({ pic, en })).filter((o) => o.en !== p.en);
+    const opts = shuffle([{ pic: p.pic, en: p.en }, ...shuffle(group).slice(0, 3)]);
+    const ai = opts.findIndex((o) => o.en === p.en);
+    if (mode === 'listenSent') {
+      return { subject: 'eng', type: 'choice', key: `E_P_${idx}`, recentKey: `E_P_${idx}`, label: '듣고 그림 고르기', say: p.en, word: p.en,
+        prompt: `${sayBtn(p.en)}<div class="hint">잘 듣고 알맞은 그림을 고르세요.</div>`,
+        choices: opts.map((o) => `<span class="pic">${o.pic}</span>`), answerIdx: ai, answerText: `${p.pic} ${p.en}`, explain: `${p.pic} ${p.en}` };
     }
-    const others = shuffle(WORDS.filter((o, i) => i !== idx && o.ko !== w.ko)).slice(0, 3);
-    if (r < 0.66) { // 영어 → 뜻
-      const opts = shuffle([w, ...others]);
-      return {
-        subject: 'eng', type: 'choice', key, label: '단어 뜻 맞히기', word: w.en,
-        prompt: `<span class="eng big">${escapeHtml(w.en)}</span><div class="hint">이 단어의 뜻은?</div>`,
-        choices: opts.map((o) => escapeHtml(o.ko)), answerIdx: opts.indexOf(w),
-        answerText: w.ko, explain: `${w.en} = ${w.ko}`,
-      };
-    }
-    const opts = shuffle([w, ...others]); // 뜻 → 영어
+    return { subject: 'eng', type: 'choice', key: `E_P_${idx}`, recentKey: `E_P_${idx}`, label: '그림에 맞는 문장', word: p.en,
+      prompt: `<div class="pic big">${p.pic}</div><div class="hint">그림에 알맞은 문장은?</div>`,
+      choices: opts.map((o) => `<span class="eng">${esc(o.en)}</span>`), answerIdx: ai, answerText: p.en, explain: `${p.pic} ${p.en}` };
+  }
+
+  orderQ(idx) {
+    const o = ORDER_SRC[idx];
+    const words = o.en.split(' ');
+    let tokens = shuffle(words);
+    for (let i = 0; i < 6 && tokens.join(' ') === o.en; i++) tokens = shuffle(words);
+    const isPic = o.ko.startsWith('<svg') || /\p{Extended_Pictographic}/u.test(o.ko);
     return {
-      subject: 'eng', type: 'choice', key, label: '단어 뜻 맞히기', word: w.en,
-      prompt: `‘<b>${escapeHtml(w.ko)}</b>’을(를) 영어로 하면?`,
-      choices: opts.map((o) => `<span class="eng">${escapeHtml(o.en)}</span>`), answerIdx: opts.indexOf(w),
-      answerText: w.en, explain: `${w.ko} = ${w.en}`,
+      subject: 'eng', type: 'spell', key: `E_O_${idx}`, recentKey: `E_O_${idx}`, label: '문장 순서 맞추기', word: o.en,
+      tokens, joiner: ' ', answerText: o.en, explain: o.en,
+      prompt: `${isPic ? `<div class="pic">${o.ko}</div>` : `<div class="hint">💬 ${esc(o.ko)}</div>`}<div>낱말을 순서대로 눌러 문장을 만드세요!</div>`,
     };
   }
 
@@ -151,6 +234,8 @@ export class QuizEngine {
   record(q, correct) {
     const st = this.mem.stats[q.key] || (this.mem.stats[q.key] = { c: 0, w: 0 });
     if (correct) st.c++; else st.w++;
+    (this.mem.hist ||= []).push(!!correct);
+    if (this.mem.hist.length > 12) this.mem.hist.shift();
     if (q.subject === 'eng') {
       const wq = this.mem.wrongQueue;
       const i = wq.indexOf(q.key);
@@ -172,29 +257,15 @@ export class QuizEngine {
   }
 }
 
-const keyOf = (item) => `E_${item.kind}_${item.idx}`;
+function poolByLvPairs(pairs, lv) {
+  const cur = pairs.filter(([x]) => x.lv === lv), easy = pairs.filter(([x]) => x.lv < lv);
+  return cur.length && (Math.random() < 0.7 || !easy.length) ? cur : easy.length ? easy : pairs;
+}
+
+const sayBtn = (text, small = false) => `<button type="button" class="say${small ? ' small' : ''}" data-say="${esc(text)}" aria-label="듣기">🔊${small ? '' : ' 듣기'}</button>`;
 
 function buildChoices(answer, distractors) {
-  const same = (a, b) => a.text === b.text || (Math.abs(a.val - b.val) < 1e-9);
-  const pool = [];
-  for (const d of distractors) {
-    if (d.val < 0 && d.val !== -1) continue;
-    if (d.text === answer.text) continue;
-    if (d.val !== -1 && Math.abs(d.val - answer.val) < 1e-9) continue;
-    if (pool.some((p) => same(p, d))) continue;
-    pool.push(d);
-  }
-  // 부족하면 근처 수로 채움
-  let bump = 1;
-  while (pool.length < 3 && typeof answer.val === 'number' && /^[\d,]+/.test(answer.text)) {
-    const v = answer.val + bump * (bump % 2 ? 1 : -1) * Math.ceil(bump / 2) * 2;
-    bump++;
-    const suffix = answer.text.replace(/^[\d,]+/, '');
-    const d = { text: `${v.toLocaleString('ko-KR')}${suffix}`, val: v };
-    if (v > 0 && !pool.some((p) => same(p, d)) && v !== answer.val) pool.push(d);
-    if (bump > 20) break;
-  }
-  const opts = shuffle([answer, ...shuffle(pool).slice(0, 3)]);
+  const opts = shuffle([answer, ...distractors.slice(0, 3)]);
   return { choices: opts.map((o) => renderMath(o.text)), answerIdx: opts.indexOf(answer) };
 }
 
@@ -204,6 +275,6 @@ export function renderMath(text) {
     `${w ? `<span class="whole">${w}</span>` : ''}<span class="frac"><span>${n}</span><span>${d}</span></span>`);
 }
 
-function escapeHtml(s) {
+function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }

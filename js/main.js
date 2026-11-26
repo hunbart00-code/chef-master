@@ -38,10 +38,12 @@ let pendingLogin = null;
 let visiting = null;
 let visitTasted = false;
 let rankKind = 'rich';
-const classControl = { isPaused: false, subjectRatio: null, maxBranchUnlocked: 4 };
+const classControl = { isPaused: false, subjectRatio: null, mathTerm: null, maxBranchUnlocked: 4 };
 const engine = new QuizEngine();
 const quiz = new QuizUI($('#quizModal'), engine, () => ({
   branch: state?.branch || 1,
+  day: state?.day || 1,
+  term: classControl.mathTerm || settings.mathTerm || 'ALL',
   subjectRatio: classControl.subjectRatio || settings.subjectRatio,
 }), sfx);
 sfx.setEnabled(settings.sound);
@@ -191,6 +193,8 @@ function initTitle() {
   };
   for (const id of ['#inpName', '#inpCode']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnLogin').click(); });
   $('#selRatio').onchange = (e) => { settings.subjectRatio = e.target.value; saveSettings(settings); };
+  $('#selTerm').value = settings.mathTerm || 'ALL';
+  $('#selTerm').onchange = (e) => { settings.mathTerm = e.target.value; saveSettings(settings); };
 }
 
 function enterAccount(id, f, isNew = false) {

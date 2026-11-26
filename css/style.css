@@ -474,3 +474,42 @@ html.short .cc-lb { width: 52px; font-size: 11px; }
 /* 휴대폰 가로: 퀴즈 보기·결산은 항상 2칸 (4번 보기가 잘리지 않게) */
 html.short .quiz-choices { grid-template-columns: 1fr 1fr; gap: 4px; }
 html.short .settle { grid-template-columns: 1fr 1fr; }
+
+/* ---------- 문제 그림·대화·듣기 ---------- */
+.quiz-prompt { gap: 4px; }
+.qfig { display: flex; justify-content: center; margin-top: 4px; }
+.qsvg { max-width: 100%; height: auto; max-height: 150px; font-family: var(--font-eng), sans-serif; }
+.choice .qsvg.net { max-height: 70px; width: auto; }
+.qtable { border-collapse: collapse; margin: 4px auto; font-size: 18px; }
+.qtable th, .qtable td { border: 2px solid #8a5a32; padding: 2px 10px; min-width: 34px; text-align: center; }
+.qtable th { background: #e4c48f; }
+.pic { font-size: 34px; line-height: 1.1; }
+.pic.big { font-size: 58px; }
+.choice .pic { font-size: 30px; }
+.dlg { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: flex-start; font-size: 21px; }
+.dlg .who { flex: none; width: 26px; height: 26px; border-radius: 50%; background: #3d6fb0; color: #fff; font-size: 14px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.dlg .who.b { background: #b0447a; }
+.say { cursor: pointer; font: inherit; font-size: 16px; padding: 4px 12px; border: 2px solid #8a5a32; border-radius: 3px; background: #fff6e2; color: #2a160b; box-shadow: 0 2px 0 #8a5a32; }
+.say.small { padding: 0 6px; font-size: 14px; margin-left: 6px; }
+.say:active { transform: translateY(2px); box-shadow: none; }
+.lv { font-size: 11px; padding: 1px 6px; border-radius: 3px; margin-left: 4px; color: #fff; }
+.lv.lv1 { background: #4c9a3c; } .lv.lv2 { background: #c98a1e; } .lv.lv3 { background: #c0392b; }
+.slots.words { flex-wrap: wrap; gap: 6px; min-height: 40px; justify-content: center; }
+.slot.word { width: auto; min-width: 30px; padding: 0 8px; font-size: 20px; height: 38px; }
+.slot.word.cursor { color: var(--cream-dim); background: transparent; }
+.tile.word { width: auto; min-width: 44px; padding: 0 10px; font-size: 19px; height: 44px; }
+html.short .qsvg { max-height: 82px; }
+html.short .choice .qsvg.net { max-height: 40px; }
+html.short .pic.big { font-size: 38px; }
+html.short .pic { font-size: 24px; }
+html.short .qtable { font-size: 13px; }
+html.short .qtable th, html.short .qtable td { padding: 0 6px; }
+html.short .dlg { font-size: 15px; }
+html.short .tile.word { height: 34px; font-size: 15px; }
+html.short .slot.word { height: 30px; font-size: 15px; }
+.qfig .qsvg { height: min(150px, 24vh); width: auto; max-height: none; }
+html.short .qfig .qsvg { height: 25vh; }
+.quiz-prompt { justify-content: safe center; overflow: auto; }
+.pic .clock { width: 1.6em; height: 1.6em; vertical-align: middle; }
+.choice .pic .clock { width: 1.3em; height: 1.3em; }
+html.short .qfig .qsvg { height: 22vh; }

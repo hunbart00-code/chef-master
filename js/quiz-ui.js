@@ -1,5 +1,18 @@
 // 퀴즈 팝업 UI: 3문제, 문제당 30초, 오답 1줄 해설
 import { renderMath } from './quiz-engine.js';
+
+// 영어 듣기 (브라우저 내장 음성)
+export function speak(text) {
+  try {
+    const ss = window.speechSynthesis; if (!ss) return;
+    ss.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US'; u.rate = 0.85;
+    const v = ss.getVoices().find((x) => /^en(-|_)US/i.test(x.lang)) || ss.getVoices().find((x) => /^en/i.test(x.lang));
+    if (v) u.voice = v;
+    ss.speak(u);
+  } catch (e) { /* ignore */ }
+}
 import { GRADE, gradeFromCorrect } from './shop-engine.js';
 
 const Q_TIME = 30;
@@ -32,6 +45,7 @@ export class QuizUI {
       slots: $('.slots'), tiles: $('.tiles'), clear: $('.q-clear'), feedback: $('.quiz-feedback'), result: $('.quiz-result'),
     };
     this.el.clear.addEventListener('click', () => this.spellUndo());
+    this.el.prompt.addEventListener('click', (e) => { const b = e.target.closest('[data-say]'); if (b) speak(b.dataset.say); });
     document.addEventListener('keydown', (e) => this.onKey(e));
   }
 
@@ -53,11 +67,11 @@ export class QuizUI {
 
   nextQuestion() {
     const ctx = this.getContext();
-    this.q = this.engine.next({ branch: ctx.branch, subjectRatio: ctx.subjectRatio, engBoost: this.opt.engBoost || 0 });
+    this.q = this.engine.next({ day: ctx.day, term: ctx.term, subjectRatio: ctx.subjectRatio, engBoost: this.opt.engBoost || 0 });
     this.answered = false;
     const q = this.q;
     this.renderDots();
-    this.el.tag.innerHTML = `<span class="subj ${q.subject}">${q.subject === 'math' ? '수학' : '영어'}</span> ${q.label}`;
+    this.el.tag.innerHTML = `<span class="subj ${q.subject}">${q.subject === 'math' ? '수학' : '영어'}</span> ${q.label} <span class="lv lv${q.lv}">${q.levelName || ''}</span>`;
     this.el.prompt.hidden = false;
     this.root.querySelector('.quiz-timer').hidden = false;
     this.el.prompt.innerHTML = `<div>${q.subject === 'math' ? renderMath(q.prompt) : q.prompt}</div>`;
@@ -78,9 +92,10 @@ export class QuizUI {
     } else {
       this.spellPicked = [];
       this.el.tiles.innerHTML = '';
-      q.letters.forEach((ch, i) => {
+      this.el.slots.className = `slots${q.joiner ? ' words' : ''}`;
+      q.tokens.forEach((ch, i) => {
         const b = document.createElement('button');
-        b.className = 'tile';
+        b.className = q.joiner ? 'tile word' : 'tile';
         b.textContent = ch;
         b.dataset.i = i;
         b.addEventListener('click', () => this.spellPick(i));
@@ -89,6 +104,7 @@ export class QuizUI {
       this.renderSlots();
     }
     this.startTimer();
+    if (q.say) setTimeout(() => speak(q.say), 250);
   }
 
   renderDots() {
@@ -125,8 +141,8 @@ export class QuizUI {
     this.el.tiles.children[i].classList.add('used');
     this.sfx?.play('tap');
     this.renderSlots();
-    if (this.spellPicked.length === this.q.letters.length) {
-      const word = this.spellPicked.map((k) => this.q.letters[k]).join('');
+    if (this.spellPicked.length === this.q.tokens.length) {
+      const word = this.spellPicked.map((k) => this.q.tokens[k]).join(this.q.joiner);
       this.answer(word === this.q.answerText ? 'ok' : 'no');
     }
   }
@@ -141,9 +157,12 @@ export class QuizUI {
   renderSlots() {
     const q = this.q;
     let s = '';
-    for (let k = 0; k < q.letters.length; k++) {
+    if (q.joiner) { // 문장: 고른 낱말을 한 줄로
+      const picked = this.spellPicked.map((k) => q.tokens[k]);
+      s = picked.map((w) => `<span class="slot word filled">${w}</span>`).join('') + (picked.length < q.tokens.length ? '<span class="slot word cursor">?</span>' : '');
+    } else for (let k = 0; k < q.tokens.length; k++) {
       const p = this.spellPicked[k];
-      s += `<span class="slot ${p !== undefined ? 'filled' : ''}">${p !== undefined ? q.letters[p] : ''}</span>`;
+      s += `<span class="slot ${p !== undefined ? 'filled' : ''}">${p !== undefined ? q.tokens[p] : ''}</span>`;
     }
     this.el.slots.innerHTML = s;
   }
@@ -249,8 +268,8 @@ export class QuizUI {
     } else if (q.type === 'spell') {
       if (e.key === 'Backspace') { e.preventDefault(); this.spellUndo(); return; }
       const k = e.key.toLowerCase();
-      if (k.length === 1) {
-        const i = q.letters.findIndex((ch, idx) => ch === k && !this.spellPicked.includes(idx));
+      if (k.length === 1 && !q.joiner) {
+        const i = q.tokens.findIndex((ch, idx) => ch === k && !this.spellPicked.includes(idx));
         if (i >= 0) this.spellPick(i);
       }
     }
