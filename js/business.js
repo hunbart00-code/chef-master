@@ -7,7 +7,6 @@ import {
   consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf,
 } from './shop-engine.js';
 import { LAYOUT_GRID } from './data-interior.js';
-import { makeCharacter } from './sprites.js';
 import { px, room, DISH_PX, ITEM_PX } from './px.js';
 
 export const DAY_LENGTH = 150;      // 실제 초 (2분 30초)
@@ -34,6 +33,7 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const OUT = '#1a0f0a';
 const ROWDY_TYPES = ['rowdy_loud', 'rowdy_picky', 'rowdy_sneak'];
+const GUEST_TYPES = ['cust_office_m', 'cust_kid', 'cust_office_f'];
 
 export function slotCenter(gx, gy) {
   const cw = (HALL.x1 - HALL.x0) / LAYOUT_GRID.cols;
@@ -129,7 +129,8 @@ export class Business {
 
   guestActor(rowdy) {
     const a = { x: DOOR.x + rand(-4, 4), y: RH + 18, path: [], speed: rand(52, 64), t: Math.random() * 10, dir: 'back', face: 1 };
-    if (rowdy) { a.kind = 'single'; a.sheet = pick(ROWDY_TYPES); } else { a.kind = 'proc'; a.spr = makeCharacter('guest'); }
+    a.kind = 'single';
+    a.sheet = pick(rowdy ? ROWDY_TYPES : GUEST_TYPES);
     return a;
   }
 
@@ -535,7 +536,7 @@ export class Business {
 
   hitTest(p) {
     const list = this.customers.filter((c) => c.state === 'order' || c.state === 'rowdy').sort((a, b) => b.y - a.y);
-    for (const c of list) if (Math.abs(p.x - c.x) < 11 && p.y > c.y - 44 && p.y < c.y + 2) return { kind: 'cust', c };
+    for (const c of list) if (Math.abs(p.x - c.x) < 11 && p.y > this.headY(c) - 22 && p.y < c.y + 2) return { kind: 'cust', c };
     for (const t of this.seats) if (t.trash && Math.abs(p.x - t.trashPos.x) < 14 && Math.abs(p.y - t.trashPos.y) < 12) return { kind: 'trash', t };
     return null;
   }
@@ -826,17 +827,25 @@ export class Business {
     g.fillStyle = color; g.fillRect(X, Y, Math.round(w * Math.max(0, Math.min(1, ratio))), 2);
   }
 
+  // 머리 꼭대기 y (스프라이트 키에 맞춰 말풍선 위치 결정)
+  headY(c) {
+    const s = px(c.sheet);
+    return c.y - (s ? s.height : 24) + 2;
+  }
+
+  bubbleW(c) { const s = px(DISH_PX[c.menuId]); return Math.max(18, (s ? s.width : 14) + 4); }
+
   drawCustomerUI(c) {
-    const hy = c.y - 22;
+    const hy = this.headY(c);
     if (c.state === 'order') {
       const blink = Math.floor(this.clock * 3) % 2;
-      this.bubble(c.x, hy - 2, 18, 15, blink ? '#e0533d' : OUT, '#fff7e0');
+      this.bubble(c.x, hy - 2, this.bubbleW(c), 15, blink ? '#e0533d' : OUT, '#fff7e0');
       this.spr(DISH_PX[c.menuId], c.x, hy - 4);
       const r = c.patience / c.maxPatience;
       this.pbar(c.x, hy - 21, 16, r, r < 0.3 ? '#e0533d' : r < 0.6 ? '#ffc83d' : '#6bd35f');
       if (r < 0.3) this.spr('angry', c.x + 11, hy - 10 - blink);
     } else if (c.state === 'cooking' || c.state === 'cooked') {
-      this.bubble(c.x, hy - 2, 18, 15, OUT, '#fff3c4');
+      this.bubble(c.x, hy - 2, this.bubbleW(c), 15, OUT, '#fff3c4');
       this.px.globalAlpha = 0.45 + 0.3 * (Math.floor(this.clock * 4) % 2);
       this.spr(DISH_PX[c.menuId], c.x, hy - 4);
       this.px.globalAlpha = 1;
