@@ -565,10 +565,14 @@ export class Business {
     switch (sv.mode) {
       case 'idle':
         sv.idleDir = 'front';
-        if (this.pass.length) { sv.mode = 'toPass'; sv.path = [{ x: sv.x, y: HALL_TOP }, PASS]; sv.idleDir = 'back'; }
+        if (this.pass.length) { sv.mode = 'toPass'; sv.path = [{ x: sv.x, y: HALL_TOP }, { x: PASS.x, y: HALL_TOP }, PASS]; }
         break;
       case 'toPass':
-        if (arrived) {
+        if (arrived) { sv.mode = 'picking'; sv.pickT = 0; sv.idleDir = 'back'; }
+        break;
+      case 'picking':
+        sv.pickT += dt;
+        if (sv.pickT >= 0.35) {
           sv.carry = this.pass.shift();
           if (!sv.carry) { sv.mode = 'idle'; break; }
           sv.mode = 'delivering';
@@ -899,7 +903,7 @@ export class Business {
   drawBar() {
     this.px.drawImage(this.barCanvas(), this.ox, this.oy);
     // 바 위에 올려 둔 완성 요리 (서빙 담당이 가져감)
-    this.pass.forEach((task, i) => this.spr(task.grade === 1 ? 'dish_burnt' : DISH_PX[task.c.menuId], PASS_DISH_X + (i % 4) * 14, BAR.top + 8 - Math.floor(i / 4) * 4));
+    this.pass.forEach((task, i) => this.spr(task.grade === 1 ? 'dish_burnt' : DISH_PX[task.c.menuId], PASS_DISH_X - (i % 3) * 16, BAR.top + 9 - Math.floor(i / 3) * 3));
   }
 
   drawTrash(s) {

@@ -19,7 +19,7 @@ export function geometry(level) {
   const barX1 = small ? 168 : level === 1 ? 236 : 300;
   const hallY1 = h - 24;
   const stools = [];
-  for (let x = 70; x < barX1 - 16; x += 40) stools.push(x);
+  for (let x = 70; x < barX1 - 50; x += 40) stools.push(x); // 오른쪽 끝은 픽업 자리
   return {
     RW: w, RH: h,
     KITCHEN_Y: 84,
@@ -29,8 +29,8 @@ export function geometry(level) {
     HALL: { x0: 24, x1: w - 24, y0: 140, y1: hallY1 },
     DOOR: { x: 64, y: h - 4 },
     AISLE_Y: L.rows === 1 ? hallY1 + 2 : 186,
-    PASS: { x: barX1 - 38, y: 137 },
-    PASS_DISH_X: barX1 - 60,
+    PASS: { x: barX1 - 22, y: 127 },   // 서빙 직원이 서는 바 앞 픽업 자리
+    PASS_DISH_X: barX1 - 22,          // 셰프가 요리를 올려 두는 바 위 자리
     CHEF_HOME: { x: small ? 104 : 160, y: 94 },
     HALL_TOP: 137,
     STOOLS: stools,
