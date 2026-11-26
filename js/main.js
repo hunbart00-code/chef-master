@@ -8,21 +8,21 @@ import {
   INGREDIENTS, MENUS, ITEMS, FRIDGE_LEVELS, RESCUE_BASE, RESCUE_PER_CORRECT, won,
   hireStaff, fireStaff, staffOf, totalWages, sellIngredient, clearFridge, missingHint, setSaveScope,
   expandShop, nextShopLevel, buffSummary,
-} from './shop-engine.js';
-import { SHOP_LEVELS, gridOf } from './shop-levels.js';
-import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js';
-import { liveClassControl, serverClosed, initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js';
-import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js';
-import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js';
-import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js';
-import { QuizEngine } from './quiz-engine.js';
-import { QuizUI } from './quiz-ui.js';
-import { Business } from './business.js';
-import { sfx } from './sfx.js';
-import { loadSprites, spriteImg } from './sprites.js';
-import { ING_SPRITE } from './sprite-atlas.js';
-import { loadPx, pxImg, DISH_PX, ITEM_PX } from './px.js';
-import { CHEF_PARTS, CHEF_PART_LABEL, defaultChefStyle, randomChefStyle, registerChef, chefSheetOf } from './chef-maker.js';
+} from './shop-engine.js?v=20261126233621';
+import { SHOP_LEVELS, gridOf } from './shop-levels.js?v=20261126233621';
+import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js?v=20261126233621';
+import { liveClassControl, serverClosed, initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js?v=20261126233621';
+import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js?v=20261126233621';
+import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js?v=20261126233621';
+import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js?v=20261126233621';
+import { QuizEngine } from './quiz-engine.js?v=20261126233621';
+import { QuizUI } from './quiz-ui.js?v=20261126233621';
+import { Business } from './business.js?v=20261126233621';
+import { sfx } from './sfx.js?v=20261126233621';
+import { loadSprites, spriteImg } from './sprites.js?v=20261126233621';
+import { ING_SPRITE } from './sprite-atlas.js?v=20261126233621';
+import { loadPx, pxImg, DISH_PX, ITEM_PX } from './px.js?v=20261126233621';
+import { CHEF_PARTS, CHEF_PART_LABEL, defaultChefStyle, randomChefStyle, registerChef, chefSheetOf } from './chef-maker.js?v=20261126233621';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];

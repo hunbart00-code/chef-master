@@ -1,7 +1,7 @@
 // 퀴즈 팝업 UI: 3문제, 문제당 30초, 오답 1줄 해설
-import { renderMath } from './quiz-engine.js';
+import { renderMath } from './quiz-engine.js?v=20261126233621';
 
-import { GRADE, gradeFromCorrect } from './shop-engine.js';
+import { GRADE, gradeFromCorrect } from './shop-engine.js?v=20261126233621';
 
 const Q_TIME = 30;
 
@@ -43,7 +43,8 @@ export class QuizUI {
   get isOpen() { return !this.root.hidden; }
 
   // 키보드(Enter)로 누른 건 detail 0 → 그대로 인정
-  fresh(e) { return !e || !e.detail || (this.downIn && this.downAt >= this.shownAt); }
+  // 문제가 뜬 뒤 0.25초 안의 터치도 무시 (손님을 빠르게 두 번 눌러 두 번째 터치가 보기에 떨어지는 경우)
+  fresh(e) { return !e || !e.detail || (this.downIn && this.downAt >= this.shownAt + 250); }
 
   /**
    * @param {object} o { title, count=3, engBoost, resultHtml(correct,total), resultButton, onDone(correct,total) }

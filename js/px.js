@@ -1,7 +1,7 @@
 // 픽셀 에셋 로더 (assets/px) — 모든 그림을 같은 1배 픽셀 격자로 관리
-import { PX_SRC, PX_ROOM, PX } from './px-atlas.js';
-import { nativeDish } from './sprites.js';
-import { SHOP_LEVELS } from './shop-levels.js';
+import { PX_SRC, PX_ROOM, PX } from './px-atlas.js?v=20261126233621';
+import { nativeDish } from './sprites.js?v=20261126233621';
+import { SHOP_LEVELS } from './shop-levels.js?v=20261126233621';
 
 const cache = {};
 const urls = {};

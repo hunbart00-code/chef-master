@@ -5,10 +5,10 @@
 import {
   MENUS, ITEMS, GRADE, TIP_RATE, tablesOf, branchMenus, canCook, anyCookable,
   consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf, furnitureBuffs,
-} from './shop-engine.js';
-import { geometry, levelOf } from './shop-levels.js';
-import { px, roomFor, DISH_PX, ITEM_PX, hasSprite } from './px.js';
-import { chefSheetOf } from './chef-maker.js';
+} from './shop-engine.js?v=20261126233621';
+import { geometry, levelOf } from './shop-levels.js?v=20261126233621';
+import { px, roomFor, DISH_PX, ITEM_PX, hasSprite } from './px.js?v=20261126233621';
+import { chefSheetOf } from './chef-maker.js?v=20261126233621';
 
 export const DAY_LENGTH = 150;      // 실제 초 (2분 30초)
 const EAT_TIME = 4.0;
