@@ -73,3 +73,91 @@ export function cloudWatchClass(ban, cb) {
   if (!db) return () => {};
   return F.onSnapshot(F.doc(db, 'classes', String(ban)), (snap) => { if (snap.exists()) cb(snap.data()); });
 }
+
+// ================= 실시간: 접속 상태 · 친구 방문 · 반 채팅 · 교사 공지 =================
+const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+export const ONLINE_MS = 90 * 1000;
+
+/** 접속 상태 (30초마다 갱신) */
+export function cloudPresence(id, data) {
+  if (!db) return;
+  F.setDoc(F.doc(db, 'presence', id), { ...data, at: Date.now() }).catch(() => {});
+}
+/** 반 친구들 접속 상태 구독 → cb({id: presence}) */
+export function cloudWatchPresence(ban, cb) {
+  if (!db) return () => {};
+  const q = F.query(F.collection(db, 'presence'), F.where('ban', '==', Number(ban)));
+  return F.onSnapshot(q, (res) => { const m = {}; res.docs.forEach((d) => { m[d.id] = d.data(); }); cb(m); }, () => {});
+}
+
+/** 친구 가게에 손님으로 들어감 → 방문 문서 id */
+export function cloudVisitStart(v) {
+  if (!db) return null;
+  const id = rid();
+  F.setDoc(F.doc(db, 'visits', id), { ...v, state: 'in', sticker: null, at: Date.now() }).catch(() => {});
+  return id;
+}
+export function cloudVisitUpdate(id, patch) {
+  if (!db || !id) return;
+  F.updateDoc(F.doc(db, 'visits', id), { ...patch, at: Date.now() }).catch(() => {});
+}
+export function cloudVisitEnd(id) {
+  if (!db || !id) return;
+  F.deleteDoc(F.doc(db, 'visits', id)).catch(() => {});
+}
+/** 어떤 가게(to)에 와 있는 손님들 구독 */
+export function cloudWatchVisits(to, cb) {
+  if (!db) return () => {};
+  const q = F.query(F.collection(db, 'visits'), F.where('to', '==', to));
+  return F.onSnapshot(q, (res) => {
+    const now = Date.now();
+    cb(res.docs.map((d) => ({ id: d.id, ...d.data() })).filter((v) => v.state === 'in' && now - v.at < ONLINE_MS * 2));
+  }, () => {});
+}
+
+/** 반 채팅 */
+export function cloudWatchChat(ban, cb) {
+  if (!db) return () => {};
+  const q = F.query(F.collection(db, 'chats', String(ban), 'msgs'), F.orderBy('at', 'desc'), F.limit(40));
+  return F.onSnapshot(q, (res) => cb(res.docs.map((d) => ({ id: d.id, ...d.data() })).reverse()), () => {});
+}
+export async function cloudSendChat(ban, msg, teacherPw) {
+  if (!db) throw new Error('offline');
+  const id = rid();
+  if (!teacherPw) return F.setDoc(F.doc(db, 'chats', String(ban), 'msgs', id), { ...msg, teacher: false, at: Date.now() });
+  const b = F.writeBatch(db), op = rid();
+  b.set(F.doc(db, 'auth', op), { pw: teacherPw });
+  b.set(F.doc(db, 'chats', String(ban), 'msgs', id), { ...msg, teacher: true, op, at: Date.now() });
+  return b.commit();
+}
+
+/** 교사 전체 공지 (세계 확성기) */
+export function cloudWatchAnnounce(cb) {
+  if (!db) return () => {};
+  const q = F.query(F.collection(db, 'announcements'), F.orderBy('at', 'desc'), F.limit(1));
+  return F.onSnapshot(q, (res) => { const d = res.docs[0]; if (d) cb({ id: d.id, ...d.data() }); }, () => {});
+}
+export async function cloudAnnounce(text, by, teacherPw) {
+  const b = F.writeBatch(db), op = rid();
+  b.set(F.doc(db, 'auth', op), { pw: teacherPw });
+  b.set(F.doc(db, 'announcements', rid()), { text, by, op, at: Date.now() });
+  return b.commit();
+}
+/** 교사: 반 통제 (화면 멈춤, 수학 범위) */
+export async function cloudClassControl(ban, patch, teacherPw) {
+  const b = F.writeBatch(db), op = rid();
+  b.set(F.doc(db, 'auth', op), { pw: teacherPw });
+  b.set(F.doc(db, 'classes', String(ban)), { ...patch, op }, { merge: true });
+  return b.commit();
+}
+/** 교사 비밀번호 확인 (서버 규칙이 맞을 때만 쓰기 허용) */
+export async function cloudTeacherCheck(teacherPw) {
+  if (!db) throw new Error('offline');
+  await F.setDoc(F.doc(db, 'auth', rid()), { pw: teacherPw });
+  return true;
+}
+/** 처음 한 번: 교사 비밀번호 등록 (이미 있으면 서버가 거절) */
+export async function cloudTeacherSetup(pwHash) {
+  if (!db) throw new Error('offline');
+  return F.setDoc(F.doc(db, 'config', 'teacher'), { pwHash });
+}

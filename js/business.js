@@ -7,7 +7,7 @@ import {
   consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf, furnitureBuffs,
 } from './shop-engine.js';
 import { geometry, levelOf } from './shop-levels.js';
-import { px, roomFor, DISH_PX, ITEM_PX } from './px.js';
+import { px, roomFor, DISH_PX, ITEM_PX, hasSprite } from './px.js';
 import { chefSheetOf } from './chef-maker.js';
 
 export const DAY_LENGTH = 150;      // 실제 초 (2분 30초)
@@ -148,7 +148,8 @@ export class Business {
     const free = this.seats.filter((t) => !t.cust);
     const menus = branchMenus(this.state);
     const c = this.guestActor(false);
-    c.sheet = 'cust_kid';
+    c.sheet = me.sheet || 'cust_kid';
+    if (hasSprite(`${c.sheet}_front`)) { c.kind = 'dir4'; c.idleDir = 'front'; }
     const seat = free[0];
     Object.assign(c, { visitor: true, visitorName: me.name, menuId: pick(menus), state: 'enter', patience: 1, maxPatience: 1 });
     if (seat) {
@@ -171,10 +172,68 @@ export class Business {
     else { c.state = 'leave'; c.path = this.exitPath(c); }
   }
 
+  // ---------- 실시간 친구 손님 (다른 기기에서 들어온 친구) ----------
+  // list: [{ id, name, sheet, sticker, stickerAt }] — 지금 와 있는 친구 전체
+  syncGuests(list) {
+    const want = new Map(list.map((v) => [v.id, v]));
+    for (const c of this.customers) {
+      if (!c.guest || c.state === 'leave') continue;
+      const v = want.get(c.guestId);
+      if (!v) { this.guestLeave(c); continue; }
+      if (v.stickerAt && v.stickerAt !== c.stickerAt) {
+        c.stickerAt = v.stickerAt;
+        if (v.sticker) { this.float(c.x, c.y - 40, v.sticker, '#ffd23f', null, true); this.sparkle(c.x, c.y - 24, 8); this.sfx?.play('perfect'); }
+      }
+      want.delete(c.guestId);
+    }
+    for (const v of want.values()) this.addGuest(v);
+  }
+
+  addGuest(v) {
+    const c = this.guestActor(false);
+    c.sheet = v.sheet || 'cust_kid';
+    if (hasSprite(`${c.sheet}_front`)) { c.kind = 'dir4'; c.idleDir = 'front'; }
+    Object.assign(c, { guest: true, guestId: v.id, visitorName: v.name, state: 'enter', stickerAt: v.stickerAt, patience: 1, maxPatience: 1 });
+    const busy = this.mode === 'business';
+    const seat = !busy && this.seats.find((t) => !t.cust && !t.trash);
+    if (seat) { c.table = seat; seat.cust = c; c.path = this.entryPath(seat.seat); c.seated = true; }
+    else {
+      // 영업 중이면 손님 자리는 비워 두고 입구 근처에 서서 구경
+      const n = this.customers.filter((x) => x.guest && x.state !== 'leave').length;
+      const spot = { x: Math.max(24, DOOR.x - 22 - n * 16), y: RH - 26 };
+      c.table = { seat: spot, base: spot.y, cust: c };
+      c.path = [{ x: DOOR.x, y: spot.y }, spot];
+    }
+    this.customers.push(c);
+    if (this.mode !== 'visit') { this.log(`🚪 <b>${v.name}</b>이(가) 손님으로 놀러 왔어요!`); this.sfx?.play('bell'); }
+  }
+
+  guestLeave(c) {
+    if (c.state === 'leave') return;
+    if (c.seated && c.table) c.table.cust = null;
+    c.state = 'leave';
+    c.path = c.seated ? this.exitPath(c) : [{ x: DOOR.x, y: c.y }, { x: DOOR.x + rand(-3, 3), y: RH + 24 }];
+  }
+
+  updateGuest(c, dt) {
+    c.t += dt;
+    if (c.state === 'enter' && this.move(c, dt)) { c.state = c.seated ? 'ate' : 'stand'; c.face = c.table.flip ? -1 : 1; c.dir = 'front'; }
+    else if (c.state === 'leave' && this.move(c, dt)) this.customers.splice(this.customers.indexOf(c), 1);
+  }
+
   // ---------- 영업 시작 ----------
   startDay() {
     this.mode = 'business';
     this.edit = null;
+    // 앉아 있던 친구 손님은 자리를 비우고 입구 쪽에 서서 구경
+    let gi = 0;
+    for (const c of this.customers) {
+      if (!c.guest || !c.seated || c.state === 'leave') continue;
+      c.table.cust = null; c.seated = false;
+      const spot = { x: Math.max(24, DOOR.x - 22 - gi++ * 16), y: RH - 26 };
+      c.table = { seat: spot, base: spot.y, cust: c };
+      c.state = 'enter'; c.path = [{ x: c.x, y: AISLE_Y }, { x: DOOR.x, y: AISLE_Y }, { x: DOOR.x, y: spot.y }, spot];
+    }
     this.stats = newDayStats();
     this.time = 0;
     this.spawnTimer = 1.2;
@@ -243,6 +302,7 @@ export class Business {
     }
     if (this.mode !== 'business') {
       for (const a of [this.chef, ...this.staffList]) { a.t += dt; this.move(a, dt); }
+      for (const c of this.customers.slice()) if (c.guest) this.updateGuest(c, dt);
       return;
     }
     this.time += dt;
@@ -385,6 +445,7 @@ export class Business {
   }
 
   updateCustomer(c, dt, rowdyActive) {
+    if (c.guest) { this.updateGuest(c, dt); return; }
     c.t += dt;
     switch (c.state) {
       case 'enter':
@@ -1166,6 +1227,7 @@ export class Business {
     if (this.mode === 'visit') {
       for (const c of this.customers) if (c.visitor && c.state !== 'leave') this.tag(g, X(c.x), Y(this.headY(c) - (['enter', 'leave'].includes(c.state) ? 6 : c.state === 'ate' ? 4 : 22)), `${c.visitorName} (나)`, '#2f7a2c');
     }
+    for (const c of this.customers) if (c.guest && c.state !== 'leave') this.tag(g, X(c.x), Y(this.headY(c) - (c.state === 'ate' ? 4 : 6)), `${c.visitorName} (친구)`, '#2f5f9a');
     if (this.mode === 'business') {
       const bob = Math.floor(this.clock * 3) % 2 ? -2 * this.dpr : 0;
       // 직원이 없으면 아이들이 뭘 눌러야 하는지 바로 보이게

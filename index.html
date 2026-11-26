@@ -31,6 +31,7 @@
     <!-- 오른쪽 위: 예보 + 버튼 -->
     <div id="hudTR" hidden>
       <div class="px-chip" id="forecastChip"></div>
+      <button class="px-btn small chat-btn" id="btnChat" title="반 채팅">💬 채팅<b id="chatBadge" hidden>0</b></button>
       <button class="px-icon" id="btnSound" title="소리">🔊</button>
       <button class="px-icon" id="btnFull" title="전체화면">⛶</button>
       <button class="px-icon" id="btnHelp" title="도움말">?</button>
@@ -98,6 +99,7 @@
         <button class="px-btn go big" id="btnNew">가게 열기</button>
         <button class="px-btn small" id="btnBack">뒤로</button>
       </div>
+      <button class="px-btn small teacher-link" id="btnTeacher">👩‍🏫 선생님 입장</button>
       <details class="local-settings">
         <summary>⚙️ 로컬 모드 설정</summary>
         <label>과목 비중
@@ -115,6 +117,37 @@
           </select>
         </label>
       </details>
+    </div>
+
+    <!-- 교사 로그인 -->
+    <div id="teacherLogin" class="px-panel center-card" hidden>
+      <h2>👩‍🏫 선생님 입장</h2>
+      <label class="field">선생님 비밀번호 <input id="tPw" type="password" autocomplete="off" placeholder="비밀번호"></label>
+      <button class="px-btn go big" id="tLogin">입장하기</button>
+      <p class="small muted">처음이라면 비밀번호를 정해 아래 버튼을 한 번만 누르세요. (6글자 이상)</p>
+      <div class="row"><button class="px-btn small" id="tSetup">🔑 처음 비밀번호 만들기</button><button class="px-btn small" id="tBack">뒤로</button></div>
+    </div>
+
+    <!-- 교사 책상 -->
+    <div id="teacherDesk" class="px-panel center-card" hidden>
+      <h2>👩‍🏫 선생님 책상</h2>
+      <div class="t-sec">
+        <b>📢 전체 공지 (모든 반 학생 화면에 크게 떠요)</b>
+        <textarea id="tAnn" maxlength="100" rows="2" placeholder="예) 5분 뒤에 수업 마무리해요! 저장하고 기다려 주세요."></textarea>
+        <button class="px-btn go" id="tAnnSend">📢 공지 보내기</button>
+      </div>
+      <div class="t-sec">
+        <b>🏫 반 관리</b>
+        <div class="row">
+          <select id="tBan"><option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option></select>
+          <button class="px-btn small" id="tChat">💬 채팅 보기</button>
+          <button class="px-btn small warn" id="tPause">✋ 화면 멈추기</button>
+        </div>
+        <label class="small">수학 범위
+          <select id="tTerm"><option value="ALL">5학년 전체</option><option value="5-1">1학기만</option><option value="5-2">2학기만</option></select>
+        </label>
+      </div>
+      <button class="px-btn small" id="tOut">나가기</button>
     </div>
 
     <!-- 마감 정산 -->
@@ -141,6 +174,7 @@
         <li><b>품질</b>: 3개 정답 ★★★ (1.5배 + 팁), 2개 ★★, 1개 이하 ★ 탄 요리(반값)</li>
         <li><b>돌발 상황</b>: 테이블의 빈 그릇은 눌러서 치우고, 😡 진상 손님은 눌러서 진정시켜요.</li>
         <li><b>마감</b>: 결산과 손님 리뷰를 보고 자동 저장돼요.</li>
+        <li><b>친구</b>: 🏘️ 친구에서 친구 가게에 손님으로 놀러 가면 친구 화면에도 내 셰프가 나타나요. 💬 채팅으로 언제든 반 친구들과 이야기해요.</li>
       </ol>
       <p class="small muted">⌨️ 보기 1~4번 숫자키, 스펠링은 알파벳 타자, Enter로 다음</p>
       <button class="px-btn go" data-close>알겠어요!</button>
@@ -161,6 +195,16 @@
   <div id="lockOverlay" hidden>
     <div class="lock-box">✋<br>선생님이 잠시 화면을 멈췄어요.<br><small>앞을 봐 주세요!</small></div>
   </div>
+
+  <!-- 반 채팅 -->
+  <div id="chatBox" class="px-panel" hidden>
+    <div class="panel-head"><b id="chatTitle">💬 반 채팅</b><button class="px-icon" id="chatClose">✕</button></div>
+    <div id="chatList"></div>
+    <div class="chat-input"><input id="chatInput" maxlength="60" placeholder="친구에게 한마디 (60자)" autocomplete="off"><button class="px-btn small go" id="chatSend">보내기</button></div>
+  </div>
+
+  <!-- 선생님 전체 공지 -->
+  <div id="announce" hidden></div>
 
   <div id="toast"></div>
 

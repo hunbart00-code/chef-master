@@ -1,10 +1,18 @@
 rules_version = '2';
-// 셰프 마스터 Firestore 보안 규칙 (로그인 없는 학급용 간단 규칙)
-// - 가게: 누구나 읽기(친구 방문·랭킹), 쓰기는 문서 크기·필수 필드 검사, 이미 있는 가게는 코드 해시가 같아야 덮어쓰기
-// - 방명록: 추가만 가능 (수정·삭제 불가), 스티커 6종만
-// - 학급 통제(classes): 읽기만, 쓰기는 콘솔/교사 페이지(3차)에서
+// 셰프 마스터 Firestore 보안 규칙 (학생은 로그인 없이, 선생님은 비밀번호로)
+// - 가게: 누구나 읽기(친구 방문·랭킹), 이미 있는 가게는 코드 해시가 같아야 덮어쓰기
+// - 방명록: 추가만, 스티커 6종만
+// - 접속 상태·방문: 실시간 표시용 작은 문서
+// - 반 채팅: 60자, 선생님 글은 비밀번호 확인이 같은 쓰기 묶음 안에 있어야 함
+// - 공지·반 통제: 선생님만 (비밀번호의 SHA-256이 config/teacher 와 같아야 함, 비밀번호는 아무도 읽을 수 없음)
 service cloud.firestore {
   match /databases/{database}/documents {
+    function teacherOp(op) {
+      return op is string
+        && !exists(/databases/$(database)/documents/auth/$(op))
+        && existsAfter(/databases/$(database)/documents/auth/$(op));
+    }
+
     match /shops/{id} {
       allow read: if true;
       allow create: if request.resource.data.keys().hasAll(['name', 'ban', 'no', 'codeHash'])
@@ -18,9 +26,49 @@ service cloud.firestore {
         && request.resource.data.sticker in ['best', 'yum', 'clean', 'cheer', 'rich', 'again'];
       allow update, delete: if false;
     }
+    match /presence/{id} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasOnly(['name', 'ban', 'no', 'mode', 'visiting', 'at'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 10;
+    }
+    match /visits/{id} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['from', 'fromName', 'to', 'ban', 'chef', 'state', 'sticker', 'stickerAt', 'at'])
+        && request.resource.data.fromName is string && request.resource.data.fromName.size() <= 10;
+      allow delete: if true;
+    }
+    match /chats/{ban}/msgs/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.text is string
+        && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 60
+        && request.resource.data.name is string && request.resource.data.name.size() <= 16
+        && (request.resource.data.teacher == false || teacherOp(request.resource.data.op));
+      allow update, delete: if false;
+    }
+    match /announcements/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.text is string && request.resource.data.text.size() <= 100
+        && teacherOp(request.resource.data.op);
+      allow update, delete: if false;
+    }
     match /classes/{ban} {
       allow read: if true;
-      allow write: if false;
+      allow write: if teacherOp(request.resource.data.op);
+    }
+    // 선생님 비밀번호: 처음 한 번만 만들 수 있고, 아무도 읽을 수 없음
+    match /config/teacher {
+      allow read: if false;
+      allow create: if request.resource.data.keys().hasOnly(['pwHash'])
+        && request.resource.data.pwHash is string && request.resource.data.pwHash.size() == 64;
+      allow update, delete: if false;
+    }
+    // 선생님 확인 쪽지: 비밀번호가 맞을 때만 만들어짐, 아무도 읽을 수 없음
+    match /auth/{id} {
+      allow read: if false;
+      allow create: if request.resource.data.keys().hasOnly(['pw'])
+        && hashing.sha256(request.resource.data.pw).toHexString().lower()
+           == get(/databases/$(database)/documents/config/teacher).data.pwHash;
+      allow update, delete: if false;
     }
   }
 }

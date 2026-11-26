@@ -11,6 +11,7 @@ import {
 } from './shop-engine.js';
 import { SHOP_LEVELS, gridOf } from './shop-levels.js';
 import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js';
+import { initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js';
 import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js';
 import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js';
 import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js';
@@ -131,6 +132,7 @@ function makeScene(st) {
   });
   scene.locked = classControl.isPaused;
   window.__chef.biz = scene;
+  if (state) liveSceneReady();
 }
 
 // ---------- 타이틀 ----------
@@ -208,12 +210,14 @@ function enterAccount(id, f, isNew = false) {
   unwatchClass();
   unwatchClass = cloudWatchClass(s.ban, applyClassControl);
   startGame(s);
+  liveLogin(s);
   if (!isNew) toast(`${f.name} 사장님, 어서 오세요! 🍜`);
 }
 
 // 로그아웃: 새로고침 없이 로그인 화면으로 (claude.ai 페이지 안에서는 새로고침이 막힐 수 있음)
 function logout() {
   if (state) persist(true);
+  liveLogout();
   unwatchClass(); unwatchClass = () => {};
   myCodeHash = null;
   sfx.bgm(null);
@@ -253,7 +257,9 @@ function startGame(s) {
 
 // ---------- 준비 ----------
 function enterPrep() {
+  if (visiting) liveVisitEnd();
   visiting = null;
+  liveMode('prep');
   sfx.bgm('prep');
   ensureForecast(state);
   const me = state;
@@ -370,7 +376,7 @@ function friendsHtml() {
   const friends = listClassmates(state).map((f) => `
     <div class="friend-card">
       ${pxImg(`${chefSheetOf(f)}_front`, 2)}
-      <div class="fr-info"><b>${f.name}</b>${f.demo ? ' <span class="tag">체험</span>' : ''}<small>DAY ${f.day} · ★ ${(f.rating || 0).toFixed(1)} · 완벽 ${f.perfectCookCount || 0}</small></div>
+      <div class="fr-info"><b>${isOnline(f.id) ? '<i class="online-dot"></i>' : ''}${f.name}</b>${f.demo ? ' <span class="tag">체험</span>' : ''}${isOnline(f.id) ? `<span class="f-status">${{ biz: '🔥 영업 중', prep: '🧺 준비 중', visit: '🚶 놀러 나감' }[presenceOf(f.id)?.mode] || '접속 중'}</span>` : ''}<small>DAY ${f.day} · ★ ${(f.rating || 0).toFixed(1)} · 완벽 ${f.perfectCookCount || 0}</small></div>
       ${cheeredToday(state, f.id) ? '<span class="done">💌 응원함</span>' : ''}
       <button class="px-btn tiny go" data-visit="${f.id}">놀러가기</button>
     </div>`).join('');
@@ -405,7 +411,9 @@ function visitFriend(id) {
   makeScene({ ...f, forecast: { id: 'sunny', day: f.day }, fridge: f.fridge || { level: 0, capacity: 20, items: {} }, inventory: f.inventory || {}, today: { expense: 0 } });
   visitTasted = false;
   if (cloudOn()) syncGuestbook(f.id).then(() => { if (visiting === f) renderVisitBar(); }).catch(() => {});
-  scene.startVisit({ name: state.name });
+  liveVisitStart(f);
+  scene.startVisit({ name: state.name, sheet: chefSheetOf(state) });
+  liveSceneReady();
   showBar('visit');
   updateHud('방문');
   renderVisitBar();
@@ -417,7 +425,8 @@ function renderVisitBar() {
   const done = cheeredToday(state, f.id);
   const left = cheersLeftToday(state);
   const book = guestbookOf(f.id).slice(0, 3).map((e) => stickerById(e.sticker).icon).join(' ');
-  $('#visitWho').innerHTML = `<span>🏠 <b>${f.name}</b>네 가게</span><small>★ ${(f.rating || 0).toFixed(1)} · DAY ${f.day}${book ? ` · 방명록 ${book}` : ''}</small>`;
+  const on = isOnline(f.id);
+  $('#visitWho').innerHTML = `<span>🏠 <b>${f.name}</b>네 가게${on ? ' <i class="online-dot"></i><small class="f-status">사장님 접속 중</small>' : ''}</span><small>★ ${(f.rating || 0).toFixed(1)} · DAY ${f.day}${book ? ` · 방명록 ${book}` : ''}</small>`;
   $('#stickerRow').innerHTML = !visitTasted
     ? '<span class="small muted">🍽️ 손님으로 들어가 시식하는 중…</span>'
     : done
@@ -724,6 +733,7 @@ async function startBusiness() {
   sfx.play('bell');
   sfx.bgm('biz');
   scene.startDay();
+  liveMode('biz');
 }
 
 async function closeEarly() {
@@ -790,6 +800,8 @@ async function init() {
   try { await Promise.all([loadSprites(), loadPx()]); } catch (e) { console.error('에셋 로드 실패', e); }
   try { await document.fonts.load('12px Galmuri11'); } catch (e) { /* 폰트 없이도 동작 */ }
   initTitle();
+  initLive({ scene: () => scene, toast });
+  document.addEventListener('live:presence', () => { if (panelKind === 'friends') renderPanel(); if (visiting) renderVisitBar(); });
   bindPanel();
   bindEdit();
   $$('#bbPrep [data-open]').forEach((b) => { b.onclick = () => openPanel(b.dataset.open); });
@@ -804,6 +816,7 @@ async function init() {
     const r = sendCheer(state, visiting, b.dataset.sticker);
     if (!r.ok) { toast(r.reason); return; }
     const st = stickerById(b.dataset.sticker);
+    liveVisitSticker(`${st.icon} ${st.text}`);
     const me = scene.visitor || scene.chef;
     scene.float(me.x, me.y - 40, `${st.icon} ${st.text}`, '#ffd23f', null, true);
     scene.sparkle(me.x, me.y - 24, 8);
