@@ -24,7 +24,7 @@ export function geometry(level) {
     RW: w, RH: h,
     KITCHEN_Y: 84,
     KITCHEN: { x0: 41, x1: barX1, y0: 48, y1: 100 },
-    BAR: { x0: 28, x1: barX1, top: 86, base: 121, vx1: 38, vy0: 48 },
+    BAR: { x0: 28, x1: barX1, top: 99, base: 121, vx1: 38, vy0: 48 },
     KDOOR_X: barX1 + 8,
     HALL: { x0: 24, x1: w - 24, y0: 140, y1: hallY1 },
     DOOR: { x: 64, y: h - 4 },
