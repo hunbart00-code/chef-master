@@ -509,11 +509,28 @@ export class Business {
           if (grade === 3) { this.sparkle(pan.x, pan.y, 6); this.sfx?.play('perfect'); }
           else if (grade === 1) { this.smoke(pan.x, pan.y, 8); this.sfx?.play('bad'); }
           else this.sfx?.play('tap');
-          if (this.server) { this.pass.push(ch.task); ch.mode = 'idle'; } else {
+          if (this.server) {
+            // 완성 요리를 들고 바 끝 픽업 자리까지 가서 내려놓음
+            ch.carry = ch.task;
+            ch.mode = 'toPassDrop';
+            ch.path = [{ x: PASS_DISH_X, y: CHEF_HOME.y }];
+          } else {
             ch.carry = ch.task;
             ch.mode = 'delivering';
             ch.path = this.route(ch, ch.task.c.table.serve);
           }
+        }
+        break;
+      case 'toPassDrop':
+        if (arrived) { ch.mode = 'dropping'; ch.dropT = 0; ch.idleDir = 'front'; }
+        break;
+      case 'dropping':
+        ch.dropT += dt;
+        if (ch.dropT >= 0.25) {
+          this.pass.push(ch.carry);
+          ch.carry = null;
+          ch.mode = 'returning';
+          ch.path = [{ x: CHEF_HOME.x, y: CHEF_HOME.y }];
         }
         break;
       case 'delivering':
