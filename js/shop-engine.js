@@ -1,0 +1,287 @@
+// 가게 상태·경제·저장 엔진 (localStorage 단독 모드, 3차에서 Firestore 연동)
+import { INGREDIENTS, MENUS, BRANCHES, FORECASTS, menuCost } from './data-menus.js';
+import { ITEMS, FRIDGE_LEVELS, DECO_BONUS_CAP } from './data-interior.js';
+
+export const SAVE_KEY = 'chefmaster_shop_v1';
+export const SETTINGS_KEY = 'chefmaster_settings_v1';
+export const START_MONEY = 30000;
+export const RESCUE_BASE = 10000;
+export const RESCUE_PER_CORRECT = 4000;
+
+export const GRADE = {
+  3: { name: '특상급', mult: 1.5, score: 5.0 },
+  2: { name: '보통',   mult: 1.0, score: 3.6 },
+  1: { name: '탄 요리', mult: 0.5, score: 1.6 },
+};
+export const TIP_RATE = 0.2;
+
+export function newShop(name = '') {
+  return {
+    version: 1,
+    name: name || '사장님',
+    studentNo: 0,
+    day: 1,
+    branch: 1,
+    money: START_MONEY,
+    rating: 3.0,
+    perfectCookCount: 0,
+    totalServed: 0,
+    fridge: { level: 0, capacity: FRIDGE_LEVELS[0].capacity, items: { tteok: 3, fishcake: 4, rice: 2, seaweed: 2, veggie: 3, noodle: 2, egg: 2 } },
+    layout: [
+      { type: 'table_wood', x: 1, y: 1 },
+      { type: 'table_wood', x: 2, y: 2 },
+      { type: 'plant_pot', x: 0, y: 0 },
+    ],
+    inventory: {},
+    staff: [],
+    recipes: {},
+    rareIngredients: [],
+    isBuildingOwner: false,
+    forecast: null,
+    today: { expense: 0 },
+    history: [],
+    lastSavedAt: null,
+  };
+}
+
+export function loadShop() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (s && s.version === 1) return { ...newShop(), ...s };
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+export function saveShop(state) {
+  state.lastSavedAt = new Date().toISOString();
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); return true; } catch (e) { return false; }
+}
+
+export function clearShop() { localStorage.removeItem(SAVE_KEY); }
+
+export function loadSettings() {
+  try { return { subjectRatio: '50:50', sound: true, ...JSON.parse(localStorage.getItem(SETTINGS_KEY)) }; } catch (e) { return { subjectRatio: '50:50', sound: true }; }
+}
+export function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ } }
+
+// ---------- 예보 ----------
+export function ensureForecast(state) {
+  if (state.forecast && state.forecast.day === state.day) return FORECASTS[state.forecast.id];
+  let id = 'sunny';
+  if (state.day > 1) {
+    const list = Object.entries(FORECASTS).filter(([, f]) => !f.minDay || state.day >= f.minDay);
+    const total = list.reduce((s, [, f]) => s + f.weight, 0);
+    let r = Math.random() * total;
+    for (const [k, f] of list) { if ((r -= f.weight) < 0) { id = k; break; } }
+  }
+  state.forecast = { id, day: state.day };
+  return FORECASTS[id];
+}
+export const currentForecast = (state) => FORECASTS[state.forecast?.id || 'sunny'];
+
+// ---------- 냉장고·재료 ----------
+export const fridgeUsed = (state) => Object.values(state.fridge.items).reduce((s, n) => s + n, 0);
+export const fridgeFree = (state) => state.fridge.capacity - fridgeUsed(state);
+
+export function buyIngredient(state, id, qty = 1) {
+  const ing = INGREDIENTS[id];
+  qty = Math.min(qty, fridgeFree(state), Math.floor(state.money / ing.price));
+  if (qty <= 0) return 0;
+  state.money -= ing.price * qty;
+  state.today.expense += ing.price * qty;
+  state.fridge.items[id] = (state.fridge.items[id] || 0) + qty;
+  return qty;
+}
+
+export const branchMenus = (state) => BRANCHES[state.branch].menus;
+
+export function cookableCount(state, menuId) {
+  const m = MENUS[menuId];
+  return Math.min(...Object.entries(m.needs).map(([ing, n]) => Math.floor((state.fridge.items[ing] || 0) / n)));
+}
+export const canCook = (state, menuId) => cookableCount(state, menuId) > 0;
+export const anyCookable = (state) => branchMenus(state).some((m) => canCook(state, m));
+
+export function consume(state, menuId, sign = -1) {
+  for (const [ing, n] of Object.entries(MENUS[menuId].needs)) {
+    state.fridge.items[ing] = (state.fridge.items[ing] || 0) + sign * n;
+  }
+}
+
+// 자동 장보기: 메뉴가 고르게 나오도록 남은 칸·자금 안에서 구매
+export function autoShop(state) {
+  const menus = branchMenus(state);
+  let bought = 0, guard = 0;
+  while (guard++ < 400) {
+    const sorted = menus.slice().sort((a, b) => cookableCount(state, a) - cookableCount(state, b));
+    let progressed = false;
+    for (const m of sorted) {
+      const needs = Object.entries(MENUS[m].needs);
+      const missing = needs.map(([ing, n]) => [ing, Math.max(0, n - ((state.fridge.items[ing] || 0) - cookableCount(state, m) * n))]);
+      const units = missing.reduce((s, [, k]) => s + k, 0);
+      const cost = missing.reduce((s, [ing, k]) => s + INGREDIENTS[ing].price * k, 0);
+      if (units === 0 || units > fridgeFree(state) || cost > state.money) continue;
+      for (const [ing, k] of missing) if (k) bought += buyIngredient(state, ing, k);
+      progressed = true;
+      break;
+    }
+    if (!progressed) break;
+  }
+  return bought;
+}
+
+export function upgradeFridge(state) {
+  const next = FRIDGE_LEVELS[state.fridge.level + 1];
+  if (!next || state.money < next.price) return false;
+  state.money -= next.price;
+  state.today.expense += next.price;
+  state.fridge.level++;
+  state.fridge.capacity = next.capacity;
+  return true;
+}
+
+// ---------- 가구 배치 ----------
+export const tablesOf = (state) => state.layout.filter((it) => ITEMS[it.type]?.kind === 'table');
+
+export function buyItem(state, type) {
+  const it = ITEMS[type];
+  if (!it || state.money < it.price) return false;
+  state.money -= it.price;
+  state.today.expense += it.price;
+  state.inventory[type] = (state.inventory[type] || 0) + 1;
+  return true;
+}
+
+export function placeItem(state, type, x, y) {
+  if (!state.inventory[type]) return false;
+  if (state.layout.some((it) => it.x === x && it.y === y)) return false;
+  state.inventory[type]--;
+  state.layout.push({ type, x, y });
+  return true;
+}
+
+export function pickupItem(state, x, y) {
+  const i = state.layout.findIndex((it) => it.x === x && it.y === y);
+  if (i < 0) return null;
+  const [it] = state.layout.splice(i, 1);
+  state.inventory[it.type] = (state.inventory[it.type] || 0) + 1;
+  return it.type;
+}
+
+export function decoBonus(state) {
+  const b = state.layout.reduce((s, it) => s + (ITEMS[it.type]?.ratingBonus || 0), 0);
+  return Math.min(DECO_BONUS_CAP, b);
+}
+
+// ---------- 가격 ----------
+export function recipeMult(state, menuId) {
+  const lv = state.recipes[menuId] || 1;
+  return 1 + 0.1 * (lv - 1);
+}
+
+export function menuPrice(state, menuId) {
+  const f = currentForecast(state);
+  const m = MENUS[menuId];
+  let p = m.price * recipeMult(state, menuId);
+  if (m.soup && f.soupMult) p *= f.soupMult;
+  return Math.round(p / 10) * 10;
+}
+
+export function gradeFromCorrect(correct) {
+  return correct >= 3 ? 3 : correct === 2 ? 2 : 1;
+}
+
+// ---------- 파산 구제 ----------
+export function cheapestMenuCost(state) {
+  return Math.min(...branchMenus(state).map(menuCost));
+}
+export function isBankrupt(state) {
+  return !anyCookable(state) && state.money < cheapestMenuCost(state);
+}
+
+// ---------- 일일 정산 ----------
+export function newDayStats() {
+  return {
+    revenue: 0, tips: 0, served: 0, grades: { 1: 0, 2: 0, 3: 0 }, lost: 0, noStock: 0,
+    rowdyHandled: 0, rowdyIgnored: 0, trashSeconds: 0, trashCleaned: 0, quizCorrect: 0, quizTotal: 0,
+  };
+}
+
+export function settleDay(state, stats) {
+  const wages = 0; // 2차: 종업원 일당
+  state.money -= wages;
+  const expense = state.today.expense;
+  const net = stats.revenue + stats.tips - expense - wages;
+
+  // 별점 계산
+  const events = [];
+  for (const g of [1, 2, 3]) for (let i = 0; i < stats.grades[g]; i++) events.push(GRADE[g].score);
+  for (let i = 0; i < stats.lost; i++) events.push(1.5);
+  for (let i = 0; i < stats.rowdyIgnored; i++) events.push(1.0);
+  for (let i = 0; i < stats.rowdyHandled; i++) events.push(4.2);
+  const oldRating = state.rating;
+  let dayScore = events.length ? events.reduce((s, v) => s + v, 0) / events.length : oldRating;
+  dayScore -= Math.min(1.2, stats.trashSeconds / 100);
+  dayScore += decoBonus(state);
+  dayScore = Math.max(1, Math.min(5, dayScore));
+  state.rating = Math.round((oldRating + (dayScore - oldRating) * 0.3) * 100) / 100;
+
+  state.perfectCookCount += stats.grades[3];
+  state.totalServed += stats.served;
+
+  const result = {
+    day: state.day, revenue: stats.revenue, tips: stats.tips, expense, wages, net,
+    oldRating, newRating: state.rating, dayScore, reviews: makeReviews(state, stats),
+  };
+  state.history.push({ day: state.day, net, rating: state.rating, served: stats.served, perfect: stats.grades[3] });
+  if (state.history.length > 60) state.history.shift();
+  state.day++;
+  state.today = { expense: 0 };
+  return result;
+}
+
+// ---------- 손님 리뷰 ----------
+const NAMES = ['배고픈 초딩', '동네 주민 박씨', '떡볶이 매니아', '퇴근길 직장인', '맛집 탐험가', '할머니 손님', '축구부 주장', '김밥 러버', '야식 요정', '학원 가는 길'];
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+
+function makeReviews(state, s) {
+  const f = currentForecast(state);
+  const pool = [];
+  const menuName = () => {
+    const ms = branchMenus(state);
+    return pick(ms.map((m) => MENUS[m].name));
+  };
+  if (s.grades[3] > 0) pool.push(
+    { stars: 5, text: `${menuName()} 진짜 미쳤어요! 인생 맛집 등극 🔥` },
+    { stars: 5, text: `사장님 손맛 최고! 매일 오고 싶어요.` },
+    { stars: 5, text: `${menuName()}이(가) 완벽했어요. 팁 드리고 왔어요 😊` },
+  );
+  if (s.grades[2] > 0) pool.push({ stars: 4, text: `${menuName()} 무난하게 맛있어요. 다음엔 특상급 기대할게요!` });
+  if (s.grades[1] > 0) pool.push(
+    { stars: 2, text: `음식이 좀 탔어요… 😢 문제를 차근차근 풀어 주세요!` },
+    { stars: 1, text: `${menuName()}에서 탄 맛이 났어요. 다음엔 더 잘해 주세요.` },
+  );
+  if (s.lost > 0) pool.push({ stars: 2, text: `너무 오래 기다리다 그냥 나왔어요 ⏰` });
+  if (s.noStock > 0) pool.push({ stars: 2, text: `먹고 싶은 메뉴 재료가 다 떨어졌대요. 장 좀 넉넉히 봐 주세요!` });
+  if (s.trashSeconds > 40) pool.push({ stars: 2, text: `테이블에 빈 그릇이 쌓여 있었어요. 청소 부탁드려요 🧹` });
+  else if (s.served > 3) pool.push({ stars: 5, text: `가게가 깔끔해서 기분 좋게 먹었어요 ✨` });
+  if (s.rowdyHandled > 0) pool.push({ stars: 5, text: `시끄러운 손님을 사장님이 바로 해결해 주셨어요 👍` });
+  if (s.rowdyIgnored > 0) pool.push({ stars: 1, text: `옆 테이블 진상 손님 때문에 밥맛이 없었어요 😡` });
+  if (state.forecast?.id === 'tourists' && s.served > 0) pool.push({ stars: 5, text: `So delicious! I will come back again! 🌏`, eng: true });
+  if (state.forecast?.id === 'rain' && s.served > 0) pool.push({ stars: 5, text: `비 오는 날엔 역시 따끈한 국물이죠 ☔` });
+  if (!pool.length) pool.push({ stars: 3, text: `손님이 별로 없어서 조용했어요.` });
+
+  const out = [];
+  const used = new Set();
+  const n = Math.min(pool.length, 3 + (Math.random() < 0.5 ? 1 : 0));
+  for (const r of pool.sort(() => Math.random() - 0.5)) {
+    if (out.length >= n) break;
+    if (used.has(r.text)) continue;
+    used.add(r.text);
+    out.push({ ...r, who: r.eng ? 'Tourist Emma' : pick(NAMES) });
+  }
+  return out.sort((a, b) => b.stars - a.stars);
+}
+
+export const won = (n) => `${Math.round(n).toLocaleString('ko-KR')}원`;
+export { INGREDIENTS, MENUS, BRANCHES, ITEMS, FRIDGE_LEVELS };
