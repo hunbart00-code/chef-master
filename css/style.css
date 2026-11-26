@@ -391,11 +391,6 @@ img.pximg { image-rendering: pixelated; vertical-align: middle; }
 html, body { touch-action: manipulation; overscroll-behavior: none; }
 #game { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 button, .tray-item, .choice, .tile { -webkit-user-select: none; user-select: none; }
-#rotateHint { display: none; }
-@media (orientation: portrait) and (max-width: 760px) {
-  html:not(.portrait-ok) #rotateHint { display: flex; position: fixed; inset: 0; z-index: 90; background: rgba(10, 5, 2, 0.94); align-items: center; justify-content: center; text-align: center; color: var(--cream); }
-  .rot-box { font-size: 18px; line-height: 1.8; }
-  .rot-box b { color: var(--gold); }
 }
 
 /* 낮은 화면 (휴대폰 가로): 모든 UI를 작게 */
@@ -578,3 +573,76 @@ html.short .t-board { font-size: 11px; }
 #chromeBanner b { color: #ffd23f; }
 #cbOpen { flex: none; font: inherit; font-weight: 700; padding: 8px 12px; border: 0; border-radius: 4px; background: #4c9a3c; color: #fff; box-shadow: 0 3px 0 #24521f; }
 #cbClose { flex: none; font: inherit; background: none; border: 0; color: var(--cream-dim); font-size: 16px; padding: 4px; }
+
+/* ================= 세로 화면 (폰 세로) ================= */
+html.portrait #feed { display: none; }
+/* 위: 1줄 = 날씨 + 버튼, 2줄 = 시계 + 돈/별점 */
+html.portrait #hudTR { left: 4px; right: 4px; top: calc(4px + env(safe-area-inset-top)); gap: 4px; justify-content: flex-end; align-items: center; }
+html.portrait .px-chip { flex: 1 1 auto; min-width: 0; max-width: none; padding: 2px 6px; overflow: hidden; white-space: nowrap; }
+html.portrait .px-chip small { display: none; }
+html.portrait .px-chip .fc-ico { font-size: 16px; }
+html.portrait .px-icon { width: 30px; height: 30px; font-size: 13px; flex: none; }
+html.portrait #hudTR .px-btn.small { min-height: 30px; font-size: 11px; padding: 0 5px; flex: none; }
+html.portrait #hudTL { top: calc(40px + env(safe-area-inset-top)); left: 4px; align-items: center; }
+html.portrait .dial { width: 50px; height: 50px; }
+html.portrait .dial b { font-size: 12px; }
+html.portrait .dial small { font-size: 8px; }
+html.portrait .hud-bars { margin-top: 0; }
+html.portrait .hud-bars .px-bar, html.portrait .hud-bars .px-bar.small { min-width: 132px; font-size: 13px; min-height: 22px; }
+/* 아래: 버튼은 4칸 격자 */
+html.portrait #bottomBar { left: 4px; right: 4px; bottom: calc(4px + env(safe-area-inset-bottom)); transform: none; max-width: none; }
+html.portrait .bb-row { flex-wrap: wrap; justify-content: center; gap: 4px; padding: 2px; border-width: 6px; border-image-width: 6px; }
+html.portrait #bbPrep:not([hidden]) { display: grid; grid-template-columns: repeat(4, 1fr); }
+html.portrait #bbPrep #btnOpen { grid-column: span 2; }
+html.portrait .bb-row .px-btn { font-size: 13px; min-height: 38px; padding: 0 4px; white-space: nowrap; }
+html.portrait #bbBiz .px-bar.time { flex: 1 1 100%; width: auto; }
+html.portrait .bb-stat { font-size: 12px; }
+html.portrait .bb-stock { flex-wrap: wrap; justify-content: center; }
+html.portrait #bbVisit .visit-who { flex: 1 1 100%; text-align: center; }
+html.portrait .sticker-row { flex-wrap: wrap; justify-content: center; }
+html.portrait .bb-hint { display: none; }
+html.portrait .tray { max-width: 100%; overflow-x: auto; }
+html.portrait .tray-item { min-width: 70px; }
+/* 팝업 패널: 위 HUD 아래 ~ 아래 버튼 위 사이를 꽉 채우고 안에서 스크롤 */
+html.portrait #panel { --tx: 0; left: 4px; right: 4px; width: auto; transform: none; top: calc(96px + env(safe-area-inset-top)); max-height: none; }
+html.portrait .ing-list { grid-template-columns: 1fr; }
+html.portrait .staff-cards { grid-template-columns: repeat(2, 1fr); }
+html.portrait .panel-head { font-size: 14px; }
+/* 로그인·셰프 꾸미기 */
+html.portrait .center-card { width: calc(100vw - 12px); max-height: calc(100dvh - 12px); }
+html.portrait #titleCard h1 { font-size: 28px; }
+html.portrait #titleCard.wide-custom h1, html.portrait #titleCard.wide-custom .subtitle { display: none; }
+html.portrait #newShopStep p { margin: 2px 0; font-size: 13px; }
+html.portrait .chef-custom { flex-direction: column; align-items: stretch; gap: 8px; }
+html.portrait .cc-preview { justify-content: center; padding: 6px; }
+html.portrait .cc-preview img { height: 64px; width: auto; }
+html.portrait .cc-opts { gap: 3px; }
+html.portrait .cc-lb { width: 58px; }
+html.portrait .sw { width: 22px; height: 22px; }
+/* 채팅·퀴즈·결산 */
+html.portrait #chatBox { left: 4px; right: 4px; width: auto; top: calc(96px + env(safe-area-inset-top)); height: calc(100dvh - 96px - 140px); }
+html.portrait .quiz-box { width: 98vw; max-height: 96dvh; gap: 6px; border-width: 8px; border-image-width: 8px; }
+html.portrait .quiz-head { font-size: 15px; }
+html.portrait .dot { width: 24px; height: 24px; font-size: 11px; }
+html.portrait .quiz-prompt { font-size: 19px; min-height: 64px; padding: 8px 6px; }
+html.portrait .eng.big { font-size: 30px; }
+html.portrait .quiz-choices { grid-template-columns: 1fr; gap: 6px; }
+html.portrait .choice { min-height: 44px; font-size: 16px; }
+html.portrait .dlg { font-size: 16px; }
+html.portrait .tile { width: 38px; height: 44px; font-size: 22px; }
+html.portrait .slot { width: 30px; height: 38px; font-size: 22px; }
+html.portrait .settle { grid-template-columns: 1fr; }
+html.portrait .settle-grid { grid-template-columns: repeat(2, 1fr); }
+html.portrait #announce { top: calc(8px + env(safe-area-inset-top)); }
+html.portrait .ann-text { font-size: 17px; }
+html.portrait .upgrade-card { flex-wrap: wrap; gap: 6px; }
+html.portrait .upgrade-card > div { flex: 1 1 150px; min-width: 0; }
+html.portrait .upgrade-card .px-btn { flex: 1 1 100%; }
+html.portrait .upgrade-card .up-ico { flex: none; }
+html.portrait .fridge-head { flex-wrap: wrap; gap: 4px 6px; }
+html.portrait .fridge-head > * { white-space: nowrap; }
+html.portrait .fridge-head .meter { flex: 1 1 120px; }
+html.portrait .tile.word { width: auto; min-width: 40px; padding: 0 8px; font-size: 17px; height: 40px; }
+html.portrait .slot.word { width: auto; font-size: 17px; height: 34px; }
+html.portrait .tray-item { min-width: 78px; }
+html.portrait .tray-info { font-size: 9px; line-height: 1.2; white-space: normal; text-align: center; }

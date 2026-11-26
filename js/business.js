@@ -255,15 +255,22 @@ export class Business {
   resize() {
     const wrap = this.pxCanvas.parentElement;
     const W = wrap.clientWidth, Hh = wrap.clientHeight;
-    // 하단 바는 방 아래쪽 돌벽 위에 겹쳐도 되므로 방 높이 기준으로 맞춤
-    const fit = Math.min(W / RW, Hh / RH);
+    // 세로 화면(폰 세로): 위 HUD와 아래 버튼 칸 사이 빈 공간에 가게를 맞춤
+    const portrait = W < Hh && W <= 1024;
+    document.documentElement.classList.toggle('portrait', portrait);
+    const TOP = portrait ? 96 : 0, BOT = portrait ? 126 : 0;
+    const availH = portrait ? Math.max(120, Hh - TOP - BOT) : Hh;
+    // 가로 화면: 하단 바는 방 아래쪽 돌벽 위에 겹쳐도 되므로 방 높이 기준으로 맞춤
+    const fit = Math.min(W / RW, availH / RH);
     // 정수배가 원칙, 단 내림 때문에 화면이 20% 넘게 비면 소수배 허용 (1280×800 크롬북 등)
-    const s = Math.floor(fit) >= 2 && Math.floor(fit) / fit >= 0.8 ? Math.floor(fit) : Math.max(1, fit);
+    const s = Math.floor(fit) >= 2 && Math.floor(fit) / fit >= 0.8 ? Math.floor(fit) : Math.max(0.5, fit);
     this.s = s;
     const vw = Math.floor(W / s), vh = Math.floor(Hh / s);
     this.vw = vw; this.vh = vh;
     this.ox = Math.floor((vw - RW) / 2);
-    this.oy = Math.max(0, Math.min(Math.floor((vh - RH) / 2), vh - RH - BAR_H + 16));
+    this.oy = portrait
+      ? Math.floor((TOP + Math.max(0, availH - RH * s) / 2) / s)
+      : Math.max(0, Math.min(Math.floor((vh - RH) / 2), vh - RH - BAR_H + 16));
     // 배치 중에는 아래 가구 트레이에 가리지 않게 화면을 위로 올림
     if (this.edit && this.editPad) this.oy = Math.max(-56, Math.min(this.oy, vh - RH - this.editPad));
     this.pxCanvas.width = vw; this.pxCanvas.height = vh;
@@ -274,7 +281,7 @@ export class Business {
     this.dpr = dpr;
     document.documentElement.style.setProperty('--s', s);
     // UI 프레임 배수: 큰 화면 3, 보통 2, 휴대폰 가로처럼 낮은 화면 1
-    document.documentElement.style.setProperty('--u', Hh < 520 ? 1 : s >= 4 ? 3 : 2);
+    document.documentElement.style.setProperty('--u', portrait || Hh < 520 ? 1 : s >= 4 ? 3 : 2);
     document.documentElement.classList.toggle('short', Hh < 520);
     this.px.imageSmoothingEnabled = false;
   }

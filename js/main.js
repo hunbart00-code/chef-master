@@ -844,7 +844,8 @@ async function init() {
   const autoFull = () => {
     if (!isPhone || isApp || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
     document.documentElement.requestFullscreen({ navigationUI: 'hide' })
-      .then(() => screen.orientation?.lock?.('landscape').catch(() => {}))
+      // 가로로 들고 있을 때만 가로 고정 (세로로 하는 친구는 세로 그대로)
+      .then(() => { if (screen.orientation?.type?.startsWith('landscape')) screen.orientation.lock?.('landscape').catch(() => {}); })
       .catch(() => {});
   };
   document.addEventListener('pointerup', autoFull, { once: true });
@@ -855,7 +856,6 @@ async function init() {
       else { await document.documentElement.requestFullscreen(); await screen.orientation?.lock?.('landscape').catch(() => {}); }
     } catch (e) { toast('이 기기에서는 전체화면을 쓸 수 없어요.'); }
   };
-  $('#btnRotateOk').onclick = () => { document.documentElement.classList.add('portrait-ok'); scene?.resize(); };
   window.addEventListener('orientationchange', () => setTimeout(() => scene?.resize(), 300));
   document.addEventListener('fullscreenchange', () => setTimeout(() => scene?.resize(), 200));
   const soundBtn = $('#btnSound');
