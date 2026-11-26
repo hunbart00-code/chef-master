@@ -160,6 +160,7 @@ img.pximg { image-rendering: pixelated; vertical-align: middle; }
 .meter { flex: 1; height: 12px; border: 2px solid #8a5a32; background: #120b07; border-radius: 2px; overflow: hidden; }
 .meter i { display: block; height: 100%; background: #5aa8ff; }
 .meter i.full { background: #e0533d; }
+.warn-line { background: rgba(224, 83, 61, 0.18); border: 1px solid #e0533d; border-radius: 3px; padding: 5px 8px; margin-bottom: 8px; font-size: 13px; color: #ffd2c8; }
 .menu-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 .menu-chip { display: flex; align-items: center; gap: 4px; background: rgba(0, 0, 0, 0.28); border: 1px solid #6b4226; border-radius: 3px; padding: 3px 6px; font-size: 12px; }
 .menu-chip span { display: flex; flex-direction: column; }

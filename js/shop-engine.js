@@ -103,6 +103,43 @@ export function buyIngredient(state, id, qty = 1) {
   return qty;
 }
 
+// 재료 되팔기 (산 값 그대로 환불 — 유통기한이 없으니 손해 없음)
+export function sellIngredient(state, id, qty = 1) {
+  const ing = INGREDIENTS[id];
+  qty = Math.min(qty, state.fridge.items[id] || 0);
+  if (qty <= 0) return 0;
+  state.fridge.items[id] -= qty;
+  state.money += ing.price * qty;
+  state.today.expense = Math.max(0, state.today.expense - ing.price * qty);
+  return qty;
+}
+
+// 냉장고 초기화: 전부 되팔기, 환불액 반환
+export function clearFridge(state) {
+  let refund = 0;
+  for (const id of Object.keys(state.fridge.items)) {
+    const n = state.fridge.items[id] || 0;
+    if (!n) continue;
+    refund += INGREDIENTS[id].price * n;
+    sellIngredient(state, id, n);
+  }
+  return refund;
+}
+
+// 가장 적게 더 사면 만들 수 있는 메뉴 안내
+export function missingHint(state) {
+  let best = null;
+  for (const m of branchMenus(state)) {
+    const miss = Object.entries(MENUS[m].needs)
+      .map(([ing, n]) => [ing, Math.max(0, n - (state.fridge.items[ing] || 0))])
+      .filter(([, k]) => k > 0);
+    const total = miss.reduce((t, [, k]) => t + k, 0);
+    if (!best || total < best.total) best = { menu: m, miss, total };
+  }
+  if (!best) return '';
+  return `${best.miss.map(([ing, k]) => `${INGREDIENTS[ing].name} ${k}개`).join(', ')} 더 사면 ${MENUS[best.menu].name} 가능`;
+}
+
 export const branchMenus = (state) => BRANCHES[state.branch].menus;
 
 export function cookableCount(state, menuId) {

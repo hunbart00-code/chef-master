@@ -6,7 +6,7 @@ import {
   fridgeUsed, fridgeFree, buyIngredient, autoShop, upgradeFridge, buyItem, placeItem, pickupItem,
   branchMenus, cookableCount, anyCookable, menuPrice, isBankrupt, settleDay, decoBonus, tablesOf,
   INGREDIENTS, MENUS, ITEMS, FRIDGE_LEVELS, RESCUE_BASE, RESCUE_PER_CORRECT, won,
-  hireStaff, fireStaff, staffOf, totalWages,
+  hireStaff, fireStaff, staffOf, totalWages, sellIngredient, clearFridge, missingHint,
 } from './shop-engine.js';
 import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js';
 import { QuizEngine } from './quiz-engine.js';
@@ -229,6 +229,7 @@ function ingredientsHtml() {
     <div class="ing-row">
       ${spriteImg(ING_SPRITE[id], 30)}
       <span class="ing-name">${ing.name}<small>${won(ing.price)}</small></span>
+      <button class="px-btn tiny ${state.fridge.items[id] ? '' : 'off'}" data-sell="${id}" title="1개 되팔기">−1</button>
       <span class="ing-have">${state.fridge.items[id] || 0}</span>
       <button class="px-btn tiny" data-buy="${id}" data-q="1">+1</button>
       <button class="px-btn tiny" data-buy="${id}" data-q="5">+5</button>
@@ -238,8 +239,10 @@ function ingredientsHtml() {
       <span>🧊 냉장고</span>
       <div class="meter"><i style="width:${(used / cap) * 100}%" class="${used >= cap ? 'full' : ''}"></i></div>
       <b>${used}/${cap}</b>
+      <button class="px-btn small" data-clear title="냉장고 재료를 전부 산 값에 되팔아요">🧹 초기화</button>
       <button class="px-btn small go" data-auto>🧺 자동 장보기</button>
     </div>
+    ${anyCookable(state) ? '' : `<div class="warn-line">⚠️ 지금 재료로는 만들 수 있는 메뉴가 없어요. ${missingHint(state)}${fridgeFree(state) <= 0 ? ' · 냉장고가 꽉 찼으니 −1이나 🧹 초기화로 자리를 비워요!' : ''}</div>`}
     <div class="menu-chips">${menus}</div>
     <div class="ing-list">${rows}</div>`;
 }
@@ -297,6 +300,23 @@ function bindPanel() {
       const got = buyIngredient(state, id, q);
       if (got < q) toast(`${got}개만 샀어요 (냉장고/자금 부족)`);
       sfx.play('tap');
+      persist(); refreshPrep();
+      return;
+    }
+    const sell = e.target.closest('[data-sell]');
+    if (sell) {
+      if (!sellIngredient(state, sell.dataset.sell, 1)) return;
+      sfx.play('tap');
+      persist(); refreshPrep();
+      return;
+    }
+    if (e.target.closest('[data-clear]')) {
+      const used = fridgeUsed(state);
+      if (!used) { toast('냉장고가 이미 비어 있어요.'); return; }
+      if (!(await confirmBox(`냉장고 재료 ${used}개를 전부 되팔까요?<br><small>산 값 그대로 돌려받아요.</small>`))) return;
+      const refund = clearFridge(state);
+      sfx.play('coin');
+      toast(`냉장고를 비웠어요! ${won(refund)} 환불`);
       persist(); refreshPrep();
       return;
     }
@@ -424,7 +444,7 @@ function doRescue() {
 // ---------- 영업 ----------
 async function startBusiness() {
   if (!tablesOf(state).length) { toast('테이블을 1개 이상 놓아야 영업할 수 있어요! (🪑 배치)'); return; }
-  if (!anyCookable(state)) { toast('만들 수 있는 메뉴가 없어요! 🛒 재료를 먼저 사요'); openPanel('ing'); return; }
+  if (!anyCookable(state)) { toast(`만들 수 있는 메뉴가 없어요! ${missingHint(state)}`); if (panelKind !== 'ing') openPanel('ing'); return; }
   const total = branchMenus(state).reduce((s, m) => s + cookableCount(state, m), 0);
   if (total < 4 && fridgeFree(state) > 2 && !(await confirmBox(`재료가 ${total}인분밖에 없어요.<br>그래도 영업을 시작할까요?`))) return;
   closePanel();
