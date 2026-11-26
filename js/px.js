@@ -20,8 +20,6 @@ export async function loadPx() {
     c.getContext('2d').drawImage(atlas, x, y, w, h, 0, 0, w, h);
     cache[name] = c;
   }
-  cache.dish_twigim = nativeDish('twigim');
-  cache.dish_eomuktang = nativeDish('eomuktang');
 }
 
 export const px = (name) => cache[name] || null;
@@ -74,4 +72,4 @@ export const DISH_PX = {
   twigim: 'dish_twigim', eomuktang: 'dish_eomuktang',
 };
 
-export const ITEM_PX = { table_wood: 'table', table_long: 'table_long', plant_pot: 'plant', trophy: 'trophy', aboard: 'aboard' };
+export const ITEM_PX = { table_wood: 'table', table_long: 'table_long', plant_pot: 'plant', trophy: 'trophy', aboard: 'aboard', rug: 'rug', water: 'water', bookshelf: 'bookshelf' };

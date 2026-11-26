@@ -7,6 +7,9 @@ export const ITEMS = {
   aboard:     { name: '입간판', icon: '📋', kind: 'deco', price: 4000, desc: '오늘의 메뉴 홍보', ratingBonus: 0.03, buff: { visit: 0.10 }, buffText: '손님 방문 +10%' },
   plant_pot:  { name: '화분',       icon: '🪴', kind: 'deco',  price: 6000,  desc: '싱그러운 가게 분위기', ratingBonus: 0.04, buff: { patience: 0.06 }, buffText: '손님 인내심 +6%' },
   trophy:     { name: '황금 트로피', icon: '🏆', kind: 'deco',  price: 9000,  desc: '맛집 인증 트로피', ratingBonus: 0.06, buff: { tip: 0.10 }, buffText: '팁 +10% · 별점 +0.06' },
+  rug:        { name: '빨간 깔개', icon: '🟥', kind: 'deco', price: 5000, desc: '포근한 바닥 깔개', ratingBonus: 0.05, buffText: '별점 +0.05' },
+  water:      { name: '정수기', icon: '🚰', kind: 'deco', price: 12000, desc: '셀프 물 코너', ratingBonus: 0.02, buff: { patience: 0.08 }, buffText: '손님 인내심 +8%' },
+  bookshelf:  { name: '만화 책장', icon: '📚', kind: 'deco', price: 15000, desc: '기다리며 읽는 만화책', ratingBonus: 0.02, buff: { visit: 0.08 }, buffText: '손님 방문 +8%' },
 };
 
 // 냉장고 단계(보관 칸 수 = 재료 총 개수 상한)

@@ -351,7 +351,7 @@ function ingredientsHtml() {
   const needed = new Set(branchMenus(state).flatMap((m) => Object.keys(MENUS[m].needs)));
   const rows = Object.entries(INGREDIENTS).filter(([id]) => needed.has(id)).map(([id, ing]) => `
     <div class="ing-row">
-      ${spriteImg(ING_SPRITE[id], 30)}
+      ${pxImg(`ing_${id}`, 1)}
       <span class="ing-name">${ing.name}<small>${won(ing.price)}</small></span>
       <button class="px-btn tiny ${state.fridge.items[id] ? '' : 'off'}" data-sell="${id}" title="1개 되팔기">−1</button>
       <span class="ing-have">${state.fridge.items[id] || 0}</span>

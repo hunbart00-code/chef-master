@@ -20,9 +20,9 @@ const OPEN_HOUR = 11, CLOSE_HOUR = 21;
 
 // ---------- 방 좌표 (1배 픽셀) — 가게 확장 단계에 따라 바뀜 (shop-levels.js) ----------
 const BAR_H = 26;                 // 하단 UI 바가 덮는 높이
-let RW, RH, KITCHEN_Y, KITCHEN, BAR, KDOOR_X, HALL, DOOR, AISLE_Y, PASS, PASS_DISH_X, CHEF_HOME, HALL_TOP, STOOLS, LAMPS, APPL, POS_X, CHALK_X, HOMES, GRID;
+let RW, RH, KITCHEN_Y, KITCHEN, BAR, KDOOR_X, HALL, DOOR, AISLE_Y, PASS, PASS_DISH_X, CHEF_HOME, HALL_TOP, STOOLS, LAMPS, APPL, POS_X, CHALK_X, HOMES, GRID, WALL;
 function applyGeometry(level) {
-  ({ RW, RH, KITCHEN_Y, KITCHEN, BAR, KDOOR_X, HALL, DOOR, AISLE_Y, PASS, PASS_DISH_X, CHEF_HOME, HALL_TOP, STOOLS, LAMPS, APPL, POS_X, CHALK_X, HOMES, GRID } = geometry(level));
+  ({ RW, RH, KITCHEN_Y, KITCHEN, BAR, KDOOR_X, HALL, DOOR, AISLE_Y, PASS, PASS_DISH_X, CHEF_HOME, HALL_TOP, STOOLS, LAMPS, APPL, POS_X, CHALK_X, HOMES, GRID, WALL } = geometry(level));
 }
 applyGeometry(2);
 
@@ -807,7 +807,9 @@ export class Business {
     add(KITCHEN_Y, () => this.spr('fridge', APPL.fridge, KITCHEN_Y));
     add(KITCHEN_Y, () => this.spr('stove', APPL.stove, KITCHEN_Y));
     add(BAR.base, () => this.drawBar());
-    for (const x of STOOLS) add(134, () => g.drawImage(this.stool(), x - 6 + this.ox, 134 - 14 + this.oy));
+    for (const x of STOOLS) add(134, () => this.spr('stool2', x, 134));
+    for (const e of APPL.extra || []) add(KITCHEN_Y, () => this.spr(e.name, e.x, KITCHEN_Y));
+    for (const w of WALL) this.spr(w.name, w.x, w.y);
     add(112, () => this.spr('pos', POS_X, 112));
     for (const tb of this.tables) add(tb.base, () => this.spr(ITEM_PX[tb.type], tb.cx, tb.base));
     for (const s of this.seats) {
@@ -848,36 +850,36 @@ export class Business {
     return (this._tiles = c);
   }
 
+  // ㄱ자 바: PixelLab 직선 카운터 모듈(bar_seg)을 이어 붙이고, 벽 쪽 꺾임은 같은 상판을 세로로 돌려 이음
   barCanvas() {
     if (this._bar) return this._bar;
+    const seg = px('bar_seg');
     const c = document.createElement('canvas'); c.width = RW; c.height = BAR.base + 3;
     const g = c.getContext('2d');
-    const P = { O: '#1a0e08', TH: '#c07e4c', T1: '#a3633a', T2: '#8e5530', LIP: '#734223', F1: '#6b3c21', F2: '#5a321c', FD: '#3e2214' };
-    const r = (col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+    g.imageSmoothingEnabled = false;
     const { x0, x1, top, base, vx1, vy0 } = BAR;
-    // 벽까지 꺾인 카운터 (윗면)
-    r(P.O, x0 - 1, vy0, vx1 - x0 + 2, top - vy0 + 1);
-    r(P.T1, x0, vy0, vx1 - x0, top - vy0);
-    r(P.TH, x0, vy0, 1, top - vy0); r(P.T2, vx1 - 1, vy0, 1, top - vy0);
-    for (let y = vy0 + 12; y < top; y += 14) r(P.T2, x0, y, vx1 - x0, 1);
-    // 긴 카운터
-    r(P.O, x0 - 1, top - 1, x1 - x0 + 2, base - top + 1);
-    r(P.T1, x0, top, x1 - x0, 10);
-    r(P.TH, x0, top, x1 - x0, 1);
-    r(P.T2, x0, top + 9, x1 - x0, 1);
-    for (let x = x0 + 30; x < x1; x += 34) r(P.T2, x, top + 1, 1, 8);
-    r(P.LIP, x0, top + 10, x1 - x0, 1);
-    r(P.FD, x0, top + 11, x1 - x0, 1);
-    r(P.F1, x0, top + 12, x1 - x0, base - top - 13);
-    for (let x = x0 + 4; x < x1; x += 8) r(P.FD, x, top + 12, 1, base - top - 13);
-    r(P.F2, x0, base - 3, x1 - x0, 2);
-    r(P.O, x0 - 1, base - 1, x1 - x0 + 2, 1);
-    g.clearRect(x1, top - 1, 1, 1); g.clearRect(x1, base - 1, 1, 1);
-    r('rgba(10,5,2,0.35)', x0, base, x1 - x0, 2);
-    // 바 위 소품: 병, 양념통
-    const bottle = (x, col) => { r(P.O, x - 1, top - 5, 5, 9); r(col, x, top - 4, 3, 7); r('#f3e2c0', x + 1, top - 3, 1, 2); r(P.O, x, top - 8, 3, 3); r(col, x + 1, top - 7, 1, 2); };
-    bottle(46, '#3d7a3a'); bottle(52, '#6b3c21'); bottle(58, '#3d6fb0');
-    r(P.O, 70, top - 1, 9, 6); r('#e8dcc4', 71, top, 7, 4); r('#e0533d', 72, top + 1, 2, 2); r('#ffd23f', 75, top + 1, 2, 2);
+    if (!seg) return (this._bar = c);
+    // 꺾인 부분: 상판(윗줄 1~10) 을 90도 돌려 세로로 타일
+    const strip = document.createElement('canvas'); strip.width = 11; strip.height = seg.width;
+    const sg = strip.getContext('2d');
+    sg.translate(11, 0); sg.rotate(Math.PI / 2);
+    sg.drawImage(seg, 0, 0, seg.width, 11, 0, 0, seg.width, 11);
+    const armW = vx1 - x0 + 2;
+    for (let y = vy0; y < top + 4; y += seg.width - 1) g.drawImage(strip, 0, 0, 11, Math.min(seg.width, top + 4 - y), x0 - 1, y, armW, Math.min(seg.width, top + 4 - y));
+    // 긴 카운터: 모듈을 1px 겹쳐 이어 붙임
+    const step = seg.width - 1;
+    for (let x = x0 - 1; x < x1; x += step) {
+      const w = Math.min(seg.width, x1 + 1 - x);
+      g.drawImage(seg, 0, 0, w, seg.height, x, base - seg.height, w, seg.height);
+    }
+    g.fillStyle = '#1a0e08'; g.fillRect(x1, base - seg.height + 1, 1, seg.height - 1);
+    g.fillStyle = 'rgba(10,5,2,0.35)'; g.fillRect(x0, base, x1 - x0, 2);
+    // 바 위 소품
+    const props = [['bottles', x0 + 20], ['sauces', x0 + 42], ['utensils', x0 + 64], ['napkins', x0 + 88]];
+    for (const [name, x] of props) {
+      const p = px(name);
+      if (p && x + p.width / 2 < x1 - 4) g.drawImage(p, Math.round(x - p.width / 2), top + 9 - p.height);
+    }
     return (this._bar = c);
   }
 
