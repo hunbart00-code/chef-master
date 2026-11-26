@@ -778,6 +778,16 @@ async function init() {
     $('#helpModal').hidden = true;
     if (scene && !quiz.isOpen) { scene.paused = false; scene.last = performance.now(); }
   };
+  // 휴대폰: 전체화면 + 가로 고정 시도, 세로 안내 닫기
+  $('#btnFull').onclick = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else { await document.documentElement.requestFullscreen(); await screen.orientation?.lock?.('landscape').catch(() => {}); }
+    } catch (e) { toast('이 기기에서는 전체화면을 쓸 수 없어요.'); }
+  };
+  $('#btnRotateOk').onclick = () => { document.documentElement.classList.add('portrait-ok'); scene?.resize(); };
+  window.addEventListener('orientationchange', () => setTimeout(() => scene?.resize(), 300));
+  document.addEventListener('fullscreenchange', () => setTimeout(() => scene?.resize(), 200));
   const soundBtn = $('#btnSound');
   const syncSound = () => { soundBtn.textContent = settings.sound ? '🔊' : '🔇'; };
   syncSound();

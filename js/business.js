@@ -211,7 +211,9 @@ export class Business {
     this.uiCanvas.style.width = `${vw * s}px`; this.uiCanvas.style.height = `${vh * s}px`;
     this.dpr = dpr;
     document.documentElement.style.setProperty('--s', s);
-    document.documentElement.style.setProperty('--u', s >= 4 ? 3 : 2);
+    // UI 프레임 배수: 큰 화면 3, 보통 2, 휴대폰 가로처럼 낮은 화면 1
+    document.documentElement.style.setProperty('--u', Hh < 520 ? 1 : s >= 4 ? 3 : 2);
+    document.documentElement.classList.toggle('short', Hh < 520);
     this.px.imageSmoothingEnabled = false;
   }
 

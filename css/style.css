@@ -386,3 +386,75 @@ img.pximg { image-rendering: pixelated; vertical-align: middle; }
 .row-end { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .staff-summary .px-btn { margin-right: 6px; }
 @media (max-width: 640px) { .chef-custom { flex-direction: column; align-items: center; } }
+
+/* ---------- 스마트폰 ---------- */
+html, body { touch-action: manipulation; overscroll-behavior: none; }
+#game { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+button, .tray-item, .choice, .tile { -webkit-user-select: none; user-select: none; }
+#rotateHint { display: none; }
+@media (orientation: portrait) and (max-width: 760px) {
+  html:not(.portrait-ok) #rotateHint { display: flex; position: fixed; inset: 0; z-index: 90; background: rgba(10, 5, 2, 0.94); align-items: center; justify-content: center; text-align: center; color: var(--cream); }
+  .rot-box { font-size: 18px; line-height: 1.8; }
+  .rot-box b { color: var(--gold); }
+}
+
+/* 낮은 화면 (휴대폰 가로): 모든 UI를 작게 */
+html.short body { font-size: 12px; }
+html.short #hudTL { top: 4px; left: 4px; }
+html.short .dial { width: 54px; height: 54px; }
+html.short .dial b { font-size: 13px; }
+html.short .dial small { font-size: 9px; }
+html.short .hud-bars { margin-top: 4px; }
+html.short .hud-bars .px-bar { min-width: 120px; font-size: 12px; min-height: 22px; }
+html.short .hud-bars .px-bar.small { font-size: 11px; min-width: 120px; }
+html.short #hudTR { top: 4px; right: 4px; gap: 4px; }
+html.short .px-chip { max-width: 170px; padding: 2px 6px; }
+html.short .px-chip small { display: none; }
+html.short .px-chip .fc-ico { font-size: 16px; }
+html.short .px-icon { width: 28px; height: 28px; font-size: 13px; }
+html.short #hudTR #btnLogout { min-height: 28px; font-size: 11px; padding: 0 6px; }
+html.short #feed { display: none; }
+html.short #bottomBar { bottom: 2px; }
+html.short .bb-row { gap: 4px; padding: 0 2px; flex-wrap: nowrap; }
+html.short .bb-row .px-btn { font-size: 12px; padding: 0 6px; min-height: 26px; }
+html.short .px-bar.time { width: 110px; }
+html.short .bb-stat { font-size: 11px; }
+html.short .bb-stat b { font-size: 12px; }
+html.short .bb-stock .stock-chip img { width: auto; height: 14px; }
+html.short .tray-item { min-width: 62px; padding: 2px; }
+html.short .tray-item img { max-height: 26px; }
+html.short .bb-hint { display: none; }
+html.short #panel { width: calc(100vw - 12px); max-height: calc(100vh - 60px); }
+html.short .panel-head { font-size: 13px; margin: 0 0 4px; }
+html.short .ing-list { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px; }
+html.short .ing-row { padding: 2px 4px; }
+html.short .staff-cards { grid-template-columns: repeat(4, minmax(110px, 1fr)); }
+html.short .sc-portrait { height: 44px; }
+html.short .sc-portrait img { height: 40px; width: auto; }
+html.short .center-card { max-height: calc(100vh - 8px); gap: 6px; padding: 0; }
+html.short #titleCard h1 { font-size: 24px; }
+html.short .field input, html.short .field select { padding: 4px 6px; font-size: 14px; }
+html.short .cc-preview img { height: 80px; width: auto; }
+html.short .settle { gap: 8px; }
+html.short .ledger td { padding: 2px 4px; }
+html.short .review { padding: 3px 6px; }
+html.short .modal { padding: 4px; }
+html.short .quiz-box { max-height: calc(100vh - 8px); gap: 4px; width: min(720px, 98vw); }
+html.short .quiz-head { font-size: 14px; }
+html.short .dot { width: 22px; height: 22px; font-size: 11px; }
+html.short .quiz-prompt { font-size: 18px; min-height: 52px; padding: 6px; }
+html.short .eng.big { font-size: 26px; }
+html.short .choice { min-height: 38px; font-size: 15px; }
+html.short .quiz-feedback { font-size: 13px; padding: 4px 8px; }
+html.short .tile { width: 36px; height: 40px; font-size: 20px; }
+html.short .slot { width: 28px; height: 34px; font-size: 20px; }
+html.short .grade .stars { font-size: 34px; }
+html.short .grade .gname { font-size: 18px; }
+html.short #titleCard.wide-custom h1, html.short #titleCard.wide-custom .subtitle { display: none; }
+html.short #titleCard .subtitle { font-size: 11px; }
+html.short .cc-opts { gap: 2px; }
+html.short .cc-row .px-btn.tiny { padding: 0 6px; }
+html.short .sw { width: 18px; height: 18px; }
+html.short .cc-preview { padding: 6px; }
+html.short .cc-preview img { height: 70px; }
+html.short #newShopStep p { margin: 2px 0; }
