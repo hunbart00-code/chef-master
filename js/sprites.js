@@ -3,7 +3,6 @@
 // - 시트에 없는 캐릭터(손님·사장님·알바)와 튀김·어묵탕은 픽셀 템플릿으로 직접 그리고,
 //   1px 검은 외곽선 + 오른쪽/아래 음영 + 왼쪽 위 하이라이트를 자동으로 넣어 16비트 도트 느낌을 냅니다.
 import { ATLAS_SRC, RECTS } from './sprite-atlas.js';
-import { STAFF_ATLAS_SRC, STAFF_RECTS } from './staff-atlas.js';
 
 const cache = {};
 const urlCache = {};
@@ -22,7 +21,7 @@ export async function loadSprites() {
       cache[name] = c;
     }
   };
-  await Promise.all([load(ATLAS_SRC, RECTS), load(STAFF_ATLAS_SRC, STAFF_RECTS)]);
+  await load(ATLAS_SRC, RECTS);
   cache.dish_twigim = drawTwigim();
   cache.dish_eomuktang = drawEomuktang();
   try { await document.fonts.load('12px Galmuri11'); } catch (e) { /* 폰트 없이도 동작 */ }
@@ -176,7 +175,7 @@ export function makeCharacter(kind = 'guest', seed = {}) {
 }
 
 // ---------- 시트에 없는 음식: 튀김·어묵탕 (도트) ----------
-function drawTwigim() {
+function drawTwigim(k = 4) {
   const rows = [
     '......................',
     '....OOOOOOOOOOOOOO....',
@@ -192,10 +191,10 @@ function drawTwigim() {
     '....OOOOOOOOOOOOOO....',
   ].map((r) => r.replace(/\./g, '.'));
   const pal = { O: '#5b5b66', W: '#ffffff', Y: '#f2b632', y: '#c98a1e', R: '#e0533d', G: '#c9c9d4' };
-  return upscale(renderPixels(rows, pal), 4);
+  return k === 1 ? renderPixels(rows, pal) : upscale(renderPixels(rows, pal), k);
 }
 
-function drawEomuktang() {
+function drawEomuktang(k = 4) {
   const rows = [
     '....b.......b.....b...',
     '....b..FFF..b.FFF.b...',
@@ -211,7 +210,7 @@ function drawEomuktang() {
     '....OOOOOOOOOOOOOO....',
   ];
   const pal = { O: '#5b5b66', H: '#8a8a96', U: '#d9a25a', u: '#f2c97a', P: '#c4c8d4', F: '#f2d7a0', f: '#d9b070', b: '#8a5426' };
-  return upscale(renderPixels(rows, pal), 4);
+  return k === 1 ? renderPixels(rows, pal) : upscale(renderPixels(rows, pal), k);
 }
 
 function upscale(src, k) {
@@ -220,4 +219,9 @@ function upscale(src, k) {
   g.imageSmoothingEnabled = false;
   g.drawImage(src, 0, 0, c.width, c.height);
   return c;
+}
+
+/** 1배 픽셀 크기 음식 (튀김·어묵탕) */
+export function nativeDish(kind) {
+  return kind === 'twigim' ? drawTwigim(1) : drawEomuktang(1);
 }

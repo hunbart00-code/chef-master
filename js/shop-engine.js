@@ -1,6 +1,6 @@
 // 가게 상태·경제·저장 엔진 (localStorage 단독 모드, 3차에서 Firestore 연동)
 import { INGREDIENTS, MENUS, BRANCHES, FORECASTS, menuCost } from './data-menus.js';
-import { ITEMS, FRIDGE_LEVELS, DECO_BONUS_CAP } from './data-interior.js';
+import { ITEMS, FRIDGE_LEVELS, DECO_BONUS_CAP, LAYOUT_GRID } from './data-interior.js';
 import { staffTier } from './data-staff.js';
 
 export const SAVE_KEY = 'chefmaster_shop_v1';
@@ -29,9 +29,9 @@ export function newShop(name = '') {
     totalServed: 0,
     fridge: { level: 0, capacity: FRIDGE_LEVELS[0].capacity, items: { tteok: 3, fishcake: 4, rice: 2, seaweed: 2, veggie: 3, noodle: 2, egg: 2 } },
     layout: [
-      { type: 'table_wood', x: 1, y: 1 },
-      { type: 'table_wood', x: 2, y: 2 },
-      { type: 'plant_pot', x: 0, y: 0 },
+      { type: 'table_wood', x: 1, y: 0 },
+      { type: 'table_wood', x: 3, y: 1 },
+      { type: 'plant_pot', x: 4, y: 0 },
     ],
     inventory: {},
     staff: [],          // [{ role: 'cleaner'|'server'|'guard', tier: 1~4, day: 고용일 }]
@@ -54,6 +54,7 @@ export function loadShop() {
       for (const it of s.layout || []) if (it.type === 'lamp') it.type = 'trophy';
       if (s.inventory?.lamp) { s.inventory.trophy = (s.inventory.trophy || 0) + s.inventory.lamp; delete s.inventory.lamp; }
       s.layout = (s.layout || []).filter((it) => ITEMS[it.type]);
+      fitLayout(s);
       s.staff = (s.staff || []).filter((x) => staffTier(x.role, x.tier));
       return { ...newShop(), ...s };
     }
@@ -150,6 +151,27 @@ export function upgradeFridge(state) {
 }
 
 // ---------- 가구 배치 ----------
+// 칸 밖에 있거나 겹친 가구는 빈 칸으로 옮기고, 자리가 없으면 창고로
+export function fitLayout(s) {
+  const { cols, rows } = LAYOUT_GRID;
+  const used = new Set();
+  const keep = [];
+  const move = [];
+  for (const it of s.layout) {
+    const k = `${it.x},${it.y}`;
+    if (it.x < cols && it.y < rows && !used.has(k)) { used.add(k); keep.push(it); } else move.push(it);
+  }
+  s.inventory = s.inventory || {};
+  for (const it of move) {
+    let placed = false;
+    for (let y = 0; y < rows && !placed; y++) for (let x = 0; x < cols && !placed; x++) {
+      if (!used.has(`${x},${y}`)) { used.add(`${x},${y}`); keep.push({ ...it, x, y }); placed = true; }
+    }
+    if (!placed) s.inventory[it.type] = (s.inventory[it.type] || 0) + 1;
+  }
+  s.layout = keep;
+}
+
 export const tablesOf = (state) => state.layout.filter((it) => ITEMS[it.type]?.kind === 'table');
 
 export function buyItem(state, type) {
