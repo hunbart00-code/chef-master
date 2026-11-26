@@ -4,6 +4,7 @@
 import { isFirebaseEnabled } from './firebase-config.js';
 import { loadShopOf, fitLayout } from './shop-engine.js';
 import { classmatesOnDevice } from './account.js';
+import { cloudOn, cloudClassmates, cloudSendCheer, cloudGuestbook } from './cloud.js';
 import { ITEMS, FRIDGE_LEVELS } from './data-interior.js';
 import { staffTier } from './data-staff.js';
 import { SHOP_LEVELS } from './shop-levels.js';
@@ -79,6 +80,7 @@ export function listClassmates(me) {
     const s = loadShopOf(a.id);
     return s ? { ...s, id: a.id, name: a.name } : null;
   }).filter(Boolean);
+  if (cloudOn()) return cloudClassmates(me.ban).filter((s) => s.id !== me.accountId).map((s) => { fitLayout(s); return s; });
   return [...real, ...DEMO_FRIENDS.map(demoShopFit)];
 }
 
@@ -106,7 +108,17 @@ export function sendCheer(me, friend, stickerId) {
   gb.unshift({ from: me.name, sticker: stickerId, at: Date.now() });
   d.guestbooks[friend.id] = gb.slice(0, 10);
   save(d);
+  cloudSendCheer(friend.id, me.name, stickerId).catch(() => {});
   return { ok: true };
+}
+
+/** 서버 방명록을 이 기기로 가져오기 (서버 모드) */
+export async function syncGuestbook(id) {
+  if (!cloudOn()) return;
+  const list = await cloudGuestbook(id);
+  const d = load();
+  d.guestbooks[id] = list;
+  save(d);
 }
 
 /** 방명록 (최신 10건) */
@@ -120,7 +132,7 @@ export function pullIncomingCheers(state) {
   const d = load();
   const myId = state.accountId;
   if (!myId) return [];
-  if (state.day > 1 && d.npcDay[myId] !== state.day) {
+  if (!cloudOn() && state.day > 1 && d.npcDay[myId] !== state.day) {
     d.npcDay[myId] = state.day;
     const n = Math.random() < 0.35 ? 0 : Math.random() < 0.7 ? 1 : 2;
     const gb = d.guestbooks[myId] || (d.guestbooks[myId] = []);

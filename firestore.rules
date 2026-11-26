@@ -1,0 +1,26 @@
+rules_version = '2';
+// 셰프 마스터 Firestore 보안 규칙 (로그인 없는 학급용 간단 규칙)
+// - 가게: 누구나 읽기(친구 방문·랭킹), 쓰기는 문서 크기·필수 필드 검사, 이미 있는 가게는 코드 해시가 같아야 덮어쓰기
+// - 방명록: 추가만 가능 (수정·삭제 불가), 스티커 6종만
+// - 학급 통제(classes): 읽기만, 쓰기는 콘솔/교사 페이지(3차)에서
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /shops/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['name', 'ban', 'no', 'codeHash'])
+        && id == string(request.resource.data.ban) + '-' + string(request.resource.data.no);
+      allow update: if resource.data.codeHash == request.resource.data.codeHash;
+      allow delete: if false;
+    }
+    match /guestbooks/{gid} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['to', 'from', 'sticker', 'at'])
+        && request.resource.data.sticker in ['best', 'yum', 'clean', 'cheer', 'rich', 'again'];
+      allow update, delete: if false;
+    }
+    match /classes/{ban} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

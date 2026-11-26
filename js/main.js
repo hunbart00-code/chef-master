@@ -10,8 +10,9 @@ import {
   expandShop, nextShopLevel, buffSummary,
 } from './shop-engine.js';
 import { SHOP_LEVELS, gridOf } from './shop-levels.js';
-import { tryLogin, createAccount, lastLogin } from './account.js';
-import { STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js';
+import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js';
+import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js';
+import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js';
 import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js';
 import { QuizEngine } from './quiz-engine.js';
 import { QuizUI } from './quiz-ui.js';
@@ -96,7 +97,9 @@ function updateHud(clock) {
   $('#forecastChip').innerHTML = `<span class="fc-ico">${f.icon}</span><span><b>${f.name}</b><small>${f.desc}</small>${promo}</span>`;
 }
 
-function persist() { saveShop(state); }
+let myCodeHash = null;
+let unwatchClass = () => {};
+function persist(now = false) { saveShop(state); cloudSaveShop(state, myCodeHash, now); }
 
 // ---------- 씬 ----------
 function makeScene(st) {
@@ -144,8 +147,26 @@ function initTitle() {
   chefStyle = randomChefStyle();
   bindCustomizer($('#chefCustomNew'), () => chefStyle, (s) => { chefStyle = s; });
   const form = () => ({ ban: $('#selBan').value, no: $('#selNo').value, name: $('#inpName').value.trim(), code: $('#inpCode').value.trim() });
-  $('#btnLogin').onclick = () => {
+  $('#btnLogin').onclick = async () => {
     const f = form();
+    // 서버 모드: 서버에 있는 가게로 확인 (다른 기기에서 만든 계정도 로그인)
+    if (cloudOn() && f.name && /^\d{4}$/.test(f.code)) {
+      try {
+        const remote = await cloudGetShop(accountId(f.ban, f.no));
+        if (remote) {
+          if (remote.name !== f.name) { toast(`${f.ban}반 ${f.no}번은 다른 이름으로 등록돼 있어요.`); sfx.play('wrong'); return; }
+          if (remote.codeHash && remote.codeHash !== hash(f.code)) { toast('코드가 달라요. 다시 입력해 주세요.'); sfx.play('wrong'); return; }
+          rememberServerAccount({ ...f, codeHash: hash(f.code) });
+          myCodeHash = hash(f.code);
+          const id = accountId(f.ban, f.no);
+          setSaveScope(id);
+          delete remote.codeHash;
+          saveShop({ ...remote, version: 1 });
+          enterAccount(id, f);
+          return;
+        }
+      } catch (e) { console.warn('[cloud] 로그인 확인 실패, 이 기기 기록으로 진행', e); }
+    }
     const r = tryLogin(f);
     if (!r.ok) { toast(r.reason); sfx.play('wrong'); return; }
     if (r.isNew) {
@@ -157,12 +178,14 @@ function initTitle() {
       renderCustomizer($('#chefCustomNew'), chefStyle);
       return;
     }
+    myCodeHash = hash(f.code);
     enterAccount(r.id, f);
   };
   $('#btnBack').onclick = () => { pendingLogin = null; $('#loginForm').hidden = false; $('#newShopStep').hidden = true; $('#titleCard').classList.remove('wide-custom'); };
   $('#btnNew').onclick = () => {
     if (!pendingLogin) return;
     const id = createAccount(pendingLogin);
+    myCodeHash = hash(pendingLogin.code);
     enterAccount(id, pendingLogin, true);
     $('#helpModal').hidden = false;
   };
@@ -177,13 +200,18 @@ function enterAccount(id, f, isNew = false) {
   if (!s) { s = newShop(f.name); s.chefStyle = { ...chefStyle }; }
   Object.assign(s, { accountId: id, ban: Number(f.ban), no: Number(f.no), name: f.name });
   saveShop(s);
+  cloudSaveShop(s, myCodeHash, true);
+  unwatchClass();
+  unwatchClass = cloudWatchClass(s.ban, applyClassControl);
   startGame(s);
   if (!isNew) toast(`${f.name} 사장님, 어서 오세요! 🍜`);
 }
 
 // 로그아웃: 새로고침 없이 로그인 화면으로 (claude.ai 페이지 안에서는 새로고침이 막힐 수 있음)
 function logout() {
-  if (state) saveShop(state);
+  if (state) persist(true);
+  unwatchClass(); unwatchClass = () => {};
+  myCodeHash = null;
   sfx.bgm(null);
   closePanel();
   if (scene) { scene.edit = null; scene.hoverSlot = null; }
@@ -224,9 +252,15 @@ function enterPrep() {
   visiting = null;
   sfx.bgm('prep');
   ensureForecast(state);
-  const fresh = pullIncomingCheers(state);
-  for (const e of fresh) { const st = stickerById(e.sticker); feed(`💌 ${e.from}: ${st.icon} ${st.text}`); }
-  if (fresh.length) toast(`친구 응원 ${fresh.length}개 도착! 오늘 매출 +${Math.round(state.promo * 100)}% 📣`);
+  const me = state;
+  const takeCheers = () => {
+    if (state !== me) return;
+    const fresh = pullIncomingCheers(state);
+    for (const e of fresh) { const st = stickerById(e.sticker); feed(`💌 ${e.from}: ${st.icon} ${st.text}`); }
+    if (fresh.length) { toast(`친구 응원 ${fresh.length}개 도착! 오늘 매출 +${Math.round(state.promo * 100)}% 📣`); updateHud(); persist(); }
+  };
+  if (cloudOn()) syncGuestbook(state.accountId).then(takeCheers).catch(() => {});
+  else takeCheers();
   saveShop(state);
   $('#settleCard').hidden = true;
   makeScene(state);
@@ -260,6 +294,10 @@ function openPanel(kind) {
   $('#panel').style.bottom = `${$('#bottomBar').offsetHeight + 14}px`;
   $('#panelTitle').textContent = PANEL_TITLES[kind];
   renderPanel();
+  // 서버 모드: 친구·랭킹은 열 때마다 반 목록을 새로 받아 다시 그림
+  if (cloudOn() && (kind === 'friends' || kind === 'rank')) {
+    cloudRefreshClass(state.ban).then(() => { if (panelKind === kind) renderPanel(); }).catch(() => toast('친구 목록을 못 불러왔어요. 인터넷을 확인해 주세요.'));
+  }
   sfx.play('tap');
 }
 
@@ -362,6 +400,7 @@ function visitFriend(id) {
   visiting = f;
   makeScene({ ...f, forecast: { id: 'sunny', day: f.day }, fridge: f.fridge || { level: 0, capacity: 20, items: {} }, inventory: f.inventory || {}, today: { expense: 0 } });
   visitTasted = false;
+  if (cloudOn()) syncGuestbook(f.id).then(() => { if (visiting === f) renderVisitBar(); }).catch(() => {});
   scene.startVisit({ name: state.name });
   showBar('visit');
   updateHud('방문');
@@ -708,7 +747,7 @@ function endBusiness(stats) {
 
 function showSettlement(stats) {
   const r = settleDay(state, stats);
-  persist();
+  persist(true); // 마감 정산은 서버에 바로 저장
   updateHud('마감');
   const acc = stats.quizTotal ? Math.round((stats.quizCorrect / stats.quizTotal) * 100) : 0;
   const diff = r.newRating - r.oldRating;
@@ -743,6 +782,7 @@ function showSettlement(stats) {
 // ---------- 초기화 ----------
 async function init() {
   window.__chef = { get state() { return state; }, biz: null, engine, quiz, applyClassControl };
+  initCloud().then((ok) => { if (ok) console.info('[ChefMaster] 학급 서버(Firebase) 연결됨'); });
   try { await Promise.all([loadSprites(), loadPx()]); } catch (e) { console.error('에셋 로드 실패', e); }
   try { await document.fonts.load('12px Galmuri11'); } catch (e) { /* 폰트 없이도 동작 */ }
   initTitle();

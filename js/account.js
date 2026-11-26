@@ -8,7 +8,7 @@ const LAST_KEY = 'chefmaster_last_login_v1';
 export const accountId = (ban, no) => `${Number(ban)}-${Number(no)}`;
 
 // 코드를 그대로 저장하지 않도록 간단한 해시 (기기 안 보호용)
-function hash(s) {
+export function hash(s) {
   let h = 0x811c9dc5;
   for (const ch of `chefmaster:${s}`) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; }
   return h.toString(16);
@@ -47,6 +47,14 @@ export function tryLogin({ ban, no, name, code }) {
   if (acc.code !== hash(code)) return { ok: false, reason: '코드가 달라요. 다시 입력해 주세요.' };
   rememberLogin(ban, no, name);
   return { ok: true, isNew: false, id };
+}
+
+/** 서버(Firebase) 계정을 이 기기에도 등록 (다음부터 오프라인 로그인 가능) */
+export function rememberServerAccount({ ban, no, name, codeHash }) {
+  const all = loadAccounts();
+  all[accountId(ban, no)] = { ban: Number(ban), no: Number(no), name, code: codeHash, created: Date.now() };
+  saveAccounts(all);
+  rememberLogin(ban, no, name);
 }
 
 export function createAccount({ ban, no, name, code }) {
