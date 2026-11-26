@@ -1,18 +1,6 @@
 // 퀴즈 팝업 UI: 3문제, 문제당 30초, 오답 1줄 해설
 import { renderMath } from './quiz-engine.js';
 
-// 영어 듣기 (브라우저 내장 음성)
-export function speak(text) {
-  try {
-    const ss = window.speechSynthesis; if (!ss) return;
-    ss.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US'; u.rate = 0.85;
-    const v = ss.getVoices().find((x) => /^en(-|_)US/i.test(x.lang)) || ss.getVoices().find((x) => /^en/i.test(x.lang));
-    if (v) u.voice = v;
-    ss.speak(u);
-  } catch (e) { /* ignore */ }
-}
 import { GRADE, gradeFromCorrect } from './shop-engine.js';
 
 const Q_TIME = 30;
@@ -45,7 +33,6 @@ export class QuizUI {
       slots: $('.slots'), tiles: $('.tiles'), clear: $('.q-clear'), feedback: $('.quiz-feedback'), result: $('.quiz-result'),
     };
     this.el.clear.addEventListener('click', () => this.spellUndo());
-    this.el.prompt.addEventListener('click', (e) => { const b = e.target.closest('[data-say]'); if (b) speak(b.dataset.say); });
     document.addEventListener('keydown', (e) => this.onKey(e));
   }
 
@@ -104,7 +91,6 @@ export class QuizUI {
       this.renderSlots();
     }
     this.startTimer();
-    if (q.say) setTimeout(() => speak(q.say), 250);
   }
 
   renderDots() {

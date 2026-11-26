@@ -10,7 +10,6 @@ const shuffle = (arr) => {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 };
-const canSpeak = () => typeof window !== 'undefined' && 'speechSynthesis' in window;
 export const LEVEL_NAME = { 1: '기초', 2: '보통', 3: '도전' };
 
 // 그림 문장 묶음 펼치기
@@ -108,11 +107,11 @@ export class QuizEngine {
     const wq = this.mem.wrongQueue.filter((k) => !this.mem.recent.slice(-4).includes(k));
     if (wq.length && Math.random() < 0.3) { const q = this.fromKey(pick(wq), lv); if (q) return q; }
     const types = lv === 1
-      ? [['picWord', 22], ['enKo', 16], ['koEn', 12], ['listenWord', 12], ['picSent', 16], ['dialog', 10], ['spell', 8], ['sentence', 4]]
+      ? [['picWord', 22], ['enKo', 16], ['koEn', 12], ['picSent', 16], ['dialog', 10], ['spell', 8], ['sentence', 4]]
       : lv === 2
-        ? [['dialog', 18], ['sentence', 16], ['picSent', 12], ['enKo', 8], ['koEn', 8], ['listenSent', 10], ['spell', 12], ['order', 10], ['picWord', 6]]
-        : [['order', 18], ['sentence', 18], ['dialog', 18], ['spell', 14], ['listenSent', 10], ['koEn', 10], ['picSent', 6], ['enKo', 6]];
-    const usable = types.filter(([t]) => canSpeak() || !t.startsWith('listen'));
+        ? [['dialog', 18], ['sentence', 16], ['picSent', 12], ['enKo', 8], ['koEn', 8], ['spell', 12], ['order', 10], ['picWord', 6]]
+        : [['order', 18], ['sentence', 18], ['dialog', 18], ['spell', 14], ['koEn', 10], ['picSent', 6], ['enKo', 6]];
+    const usable = types;
     const total = usable.reduce((s, [, w]) => s + w, 0);
     let r = Math.random() * total, type = usable[0][0];
     for (const [t, w] of usable) { if ((r -= w) < 0) { type = t; break; } }
@@ -121,7 +120,7 @@ export class QuizEngine {
 
   makeType(type, lv, idx) {
     switch (type) {
-      case 'enKo': case 'koEn': case 'picWord': case 'listenWord': case 'spell': {
+      case 'enKo': case 'koEn': case 'picWord': case 'spell': {
         let list = WORDS.map((w, i) => [w, i]);
         if (type === 'picWord') list = list.filter(([w]) => w.pic);
         if (type === 'spell') list = list.filter(([w]) => /^[a-z]+$/.test(w.en) && w.en.length >= 3 && w.en.length <= (lv === 1 ? 5 : lv === 2 ? 7 : 10));
@@ -131,7 +130,7 @@ export class QuizEngine {
       }
       case 'dialog': return this.dialogQ(idx ?? pick(poolByLv(DIALOGS, lv))[1]);
       case 'sentence': return this.sentenceQ(idx ?? pick(poolByLv(SENTENCES, lv))[1]);
-      case 'picSent': case 'listenSent': return this.picQ(idx ?? pick(poolByLv(PIC_ITEMS, lv))[1], type);
+      case 'picSent': return this.picQ(idx ?? pick(poolByLv(PIC_ITEMS, lv))[1]);
       case 'order': return this.orderQ(idx ?? pick(poolByLv(ORDER_SRC, lv))[1]);
       default: return this.wordQ(0, 'enKo');
     }
@@ -164,19 +163,13 @@ export class QuizEngine {
         prompt: `<div class="pic big">${w.pic}</div><div class="hint">그림에 알맞은 영어 단어는?</div>`,
         choices: opts.map((o) => `<span class="eng">${esc(o.en)}</span>`) };
     }
-    if (mode === 'listenWord') {
-      const withPic = w.pic && others.every((o) => o.pic);
-      return { ...base, type: 'choice', label: '듣고 고르기', say: w.en, answerIdx: opts.indexOf(w), answerText: `${w.en} (${w.ko})`,
-        prompt: `${sayBtn(w.en)}<div class="hint">잘 듣고 알맞은 ${withPic ? '그림' : '뜻'}을 고르세요.</div>`,
-        choices: opts.map((o) => (withPic ? `<span class="pic">${o.pic}</span>` : esc(o.ko))) };
-    }
     if (mode === 'koEn') {
       return { ...base, type: 'choice', label: '우리말 → 영어', answerIdx: opts.indexOf(w), answerText: w.en,
         prompt: `${w.pic ? `<div class="pic">${w.pic}</div>` : ''}‘<b>${esc(w.ko)}</b>’을(를) 영어로 하면?`,
         choices: opts.map((o) => `<span class="eng">${esc(o.en)}</span>`) };
     }
     return { ...base, type: 'choice', label: '단어 뜻 맞히기', answerIdx: opts.indexOf(w), answerText: w.ko,
-      prompt: `<span class="eng big">${esc(w.en)}</span>${sayBtn(w.en, true)}<div class="hint">이 단어의 뜻은?</div>`,
+      prompt: `<span class="eng big">${esc(w.en)}</span><div class="hint">이 단어의 뜻은?</div>`,
       choices: opts.map((o) => esc(o.ko)) };
   }
 
@@ -185,7 +178,7 @@ export class QuizEngine {
     const opts = shuffle([d.a, ...d.w]);
     return {
       subject: 'eng', type: 'choice', key: `E_D_${idx}`, recentKey: `E_D_${idx}`, label: '알맞은 대답 고르기', word: d.a,
-      prompt: `<div class="dlg"><span class="who">A</span><span class="eng">${esc(d.q)}</span>${sayBtn(d.q, true)}</div><div class="dlg"><span class="who b">B</span><span class="eng">________</span></div><div class="hint">💬 ${esc(d.ko)}</div>`,
+      prompt: `<div class="dlg"><span class="who">A</span><span class="eng">${esc(d.q)}</span></div><div class="dlg"><span class="who b">B</span><span class="eng">________</span></div><div class="hint">💬 ${esc(d.ko)}</div>`,
       choices: opts.map((o) => `<span class="eng">${esc(o)}</span>`), answerIdx: opts.indexOf(d.a),
       answerText: d.a, explain: `A: ${d.q} → B: ${d.a}`,
     };
@@ -202,16 +195,11 @@ export class QuizEngine {
     };
   }
 
-  picQ(idx, mode) {
+  picQ(idx) {
     const p = PIC_ITEMS[idx];
     const group = PICTURES[p.gi].items.map(([pic, en]) => ({ pic, en })).filter((o) => o.en !== p.en);
     const opts = shuffle([{ pic: p.pic, en: p.en }, ...shuffle(group).slice(0, 3)]);
     const ai = opts.findIndex((o) => o.en === p.en);
-    if (mode === 'listenSent') {
-      return { subject: 'eng', type: 'choice', key: `E_P_${idx}`, recentKey: `E_P_${idx}`, label: '듣고 그림 고르기', say: p.en, word: p.en,
-        prompt: `${sayBtn(p.en)}<div class="hint">잘 듣고 알맞은 그림을 고르세요.</div>`,
-        choices: opts.map((o) => `<span class="pic">${o.pic}</span>`), answerIdx: ai, answerText: `${p.pic} ${p.en}`, explain: `${p.pic} ${p.en}` };
-    }
     return { subject: 'eng', type: 'choice', key: `E_P_${idx}`, recentKey: `E_P_${idx}`, label: '그림에 맞는 문장', word: p.en,
       prompt: `<div class="pic big">${p.pic}</div><div class="hint">그림에 알맞은 문장은?</div>`,
       choices: opts.map((o) => `<span class="eng">${esc(o.en)}</span>`), answerIdx: ai, answerText: p.en, explain: `${p.pic} ${p.en}` };
@@ -261,8 +249,6 @@ function poolByLvPairs(pairs, lv) {
   const cur = pairs.filter(([x]) => x.lv === lv), easy = pairs.filter(([x]) => x.lv < lv);
   return cur.length && (Math.random() < 0.7 || !easy.length) ? cur : easy.length ? easy : pairs;
 }
-
-const sayBtn = (text, small = false) => `<button type="button" class="say${small ? ' small' : ''}" data-say="${esc(text)}" aria-label="듣기">🔊${small ? '' : ' 듣기'}</button>`;
 
 function buildChoices(answer, distractors) {
   const opts = shuffle([answer, ...distractors.slice(0, 3)]);
