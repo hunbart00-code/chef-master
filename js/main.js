@@ -838,6 +838,17 @@ async function init() {
     if (scene && !quiz.isOpen) { scene.paused = false; scene.last = performance.now(); }
   };
   // 휴대폰: 전체화면 + 가로 고정 시도, 세로 안내 닫기
+  // 폰: 첫 터치(그리고 입장·영업 시작 버튼)에서 자동으로 전체화면 + 가로 고정 (브라우저는 터치 없이 전체화면을 허락하지 않음)
+  const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isApp = matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches;
+  const autoFull = () => {
+    if (!isPhone || isApp || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+      .then(() => screen.orientation?.lock?.('landscape').catch(() => {}))
+      .catch(() => {});
+  };
+  document.addEventListener('pointerup', autoFull, { once: true });
+  ['#btnLogin', '#btnNew', '#btnOpen'].forEach((s) => $(s).addEventListener('click', autoFull));
   $('#btnFull').onclick = async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
