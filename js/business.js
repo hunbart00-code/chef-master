@@ -236,12 +236,10 @@ export class Business {
       for (const c of this.customers.slice()) this.updateCustomer(c, dt, false);
       this.updateChef(dt);
       this.updateServer(dt);
-      if (Math.random() < dt * 3) this.steam(false);
       return;
     }
     if (this.mode !== 'business') {
       for (const a of [this.chef, ...this.staffList]) { a.t += dt; this.move(a, dt); }
-      if (Math.random() < dt * 3) this.steam(false);
       return;
     }
     this.time += dt;
@@ -260,7 +258,6 @@ export class Business {
       this.busy.left -= dt;
       if (this.busy.left <= 0) { const b = this.busy; this.busy = null; b.done(); }
     }
-    if (Math.random() < dt * 3) this.steam(false);
     this.hudTimer -= dt;
     if (this.hudTimer <= 0) { this.hudTimer = 0.2; this.pushHud(); }
     if (this.time >= DAY_LENGTH) this.endDay();
@@ -814,7 +811,7 @@ export class Business {
 
   // ---------- 이펙트 ----------
   // 화구 왼쪽 버너 (음식이 올라가는 자리)
-  burnerPos() { const s = px('stove'); return { x: APPL.stove - 12, y: KITCHEN_Y - (s ? s.height : 36) + 17 }; }
+  burnerPos() { const s = px('stove_empty'); return { x: APPL.stove, y: KITCHEN_Y - (s ? s.height : 36) + 16 }; }
 
   drawStoveCooking() {
     const ch = this.chef;
@@ -844,7 +841,7 @@ export class Business {
     if (cooking) this.pbar(b.x, by - 20, 18, k, burnt ? '#e0533d' : '#ff9a3d');
   }
 
-  panPos() { const s = px('stove'); return { x: APPL.stove + 6, y: KITCHEN_Y - (s ? s.height : 30) + 6 }; }
+  panPos() { return this.burnerPos(); }
   steam(strong) { const p = this.panPos(); this.particles.push({ kind: 'steam', x: p.x + rand(-4, 4), y: p.y, vx: rand(-1, 1), vy: -rand(6, 12), life: 0, max: strong ? 1 : 1.5 }); }
   sparkle(x, y, n) { for (let i = 0; i < n; i++) this.particles.push({ kind: 'spark', x: x + rand(-10, 10), y: y + rand(-6, 4), vx: rand(-6, 6), vy: -rand(4, 14), life: 0, max: rand(0.5, 1) }); }
   smoke(x, y, n) { for (let i = 0; i < n; i++) this.particles.push({ kind: 'smoke', x: x + rand(-6, 6), y: y + rand(-3, 3), vx: rand(-3, 3), vy: -rand(6, 12), life: 0, max: rand(0.8, 1.4) }); }
@@ -876,7 +873,7 @@ export class Business {
     const add = (y, fn) => items.push({ y, fn });
     add(KITCHEN_Y, () => this.spr('rack', APPL.rack, KITCHEN_Y));
     add(KITCHEN_Y, () => this.spr('fridge', APPL.fridge, KITCHEN_Y));
-    add(KITCHEN_Y, () => { this.spr('stove', APPL.stove, KITCHEN_Y); this.drawStoveCooking(); });
+    add(KITCHEN_Y, () => { this.spr('stove_empty', APPL.stove, KITCHEN_Y); this.drawStoveCooking(); });
     add(BAR.base, () => this.drawBar());
     for (const x of STOOLS) add(134, () => this.spr('stool2', x, 134));
     for (const e of APPL.extra || []) add(KITCHEN_Y, () => this.spr(e.name, e.x, KITCHEN_Y));
