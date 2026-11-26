@@ -98,7 +98,7 @@ export class Business {
           table: tb, cust: null, trash: false, reserved: false, dish: null, flip: ox > 0,
           base: tb.base,
           seat: { x: c.x + ox, y: c.y + (long ? 6 : 8) },
-          serve: { x: c.x + (long ? ox : 4), y: c.y + 22 },
+          serve: { x: c.x + (long ? ox : 2), y: AISLE_Y, face: c.y < AISLE_Y ? 'back' : 'front' }, // 상 앞 통로에서 서빙
           trashPos: { x: c.x + (long ? ox / 2 : 1), y: c.y + 2 },
         });
       }
@@ -313,9 +313,36 @@ export class Business {
   route(a, dest) {
     const ai = this.inKitchen(a), di = this.inKitchen(dest);
     if (ai && di) return [{ x: a.x, y: CHEF_HOME.y }, dest];
-    if (ai) return [{ x: a.x, y: CHEF_HOME.y }, { x: KDOOR_X, y: CHEF_HOME.y }, { x: KDOOR_X, y: HALL_TOP }, { x: dest.x, y: HALL_TOP }, dest];
-    if (di) return [{ x: a.x, y: HALL_TOP }, { x: KDOOR_X, y: HALL_TOP }, { x: KDOOR_X, y: CHEF_HOME.y }, dest];
-    return [{ x: a.x, y: HALL_TOP }, { x: dest.x, y: HALL_TOP }, dest];
+    if (ai) return [{ x: a.x, y: CHEF_HOME.y }, { x: KDOOR_X, y: CHEF_HOME.y }, ...this.walk({ x: KDOOR_X, y: HALL_TOP }, dest)];
+    if (di) return [...this.walk(a, { x: KDOOR_X, y: HALL_TOP }), { x: KDOOR_X, y: CHEF_HOME.y }, dest];
+    return this.walk(a, dest);
+  }
+
+  // 홀 이동: 바 앞 통로(HALL_TOP) ↔ 테이블 칸 사이 빈 기둥 ↔ 가운데 통로(AISLE_Y). 테이블을 뚫고 지나가지 않음
+  gapX(x) {
+    const cw = (HALL.x1 - HALL.x0) / GRID.cols;
+    const k = Math.max(0, Math.min(GRID.cols, Math.round((x - HALL.x0) / cw)));
+    return Math.round(HALL.x0 + k * cw + (k === 0 ? 6 : k === GRID.cols ? -6 : 0));
+  }
+  lane(y) { return y <= HALL_TOP + 2 ? 'top' : Math.abs(y - AISLE_Y) <= 2 ? 'aisle' : 'other'; }
+  walk(a, dest) {
+    const pts = [];
+    const fromTop = a.y <= HALL_TOP + 6;
+    const toTop = dest.y <= HALL_TOP + 6;
+    if (fromTop && toTop) return [{ x: a.x, y: HALL_TOP }, { x: dest.x, y: HALL_TOP }, dest];
+    if (fromTop) {
+      const gx = this.gapX(a.x);
+      pts.push({ x: a.x, y: HALL_TOP }, { x: gx, y: HALL_TOP }, { x: gx, y: AISLE_Y });
+    } else {
+      pts.push({ x: a.x, y: AISLE_Y });
+    }
+    if (toTop) {
+      const gx = this.gapX(dest.x);
+      pts.push({ x: gx, y: AISLE_Y }, { x: gx, y: HALL_TOP }, { x: dest.x, y: HALL_TOP }, dest);
+    } else {
+      pts.push({ x: dest.x, y: AISLE_Y }, dest);
+    }
+    return pts;
   }
 
   // ---------- 손님 ----------
@@ -489,6 +516,7 @@ export class Business {
         break;
       case 'delivering':
         if (arrived) {
+          ch.idleDir = ch.carry.c.table.serve.face || 'back';
           this.serve(ch.carry.c, ch.carry.grade);
           ch.carry = null;
           ch.mode = 'returning';
@@ -535,7 +563,7 @@ export class Business {
         if (!t) break;
         t.reserved = true; t.reservedBy = 'cleaner';
         cl.task = t; cl.mode = 'going';
-        cl.path = [{ x: cl.x, y: HALL_TOP }, t.serve];
+        cl.path = this.walk(cl, t.serve);
         break;
       }
       case 'going':
@@ -547,7 +575,7 @@ export class Business {
         if (cl.sweepT >= cl.def.work) {
           this.finishClean(cl.task);
           cl.mode = 'returning';
-          cl.path = [{ x: cl.x, y: HALL_TOP }, cl.home];
+          cl.path = this.walk(cl, cl.home);
         }
         break;
       case 'returning':
@@ -565,7 +593,7 @@ export class Business {
     switch (sv.mode) {
       case 'idle':
         sv.idleDir = 'front';
-        if (this.pass.length) { sv.mode = 'toPass'; sv.path = [{ x: sv.x, y: HALL_TOP }, { x: PASS.x, y: HALL_TOP }, PASS]; }
+        if (this.pass.length) { sv.mode = 'toPass'; sv.path = [...this.walk(sv, { x: PASS.x, y: HALL_TOP }), PASS]; }
         break;
       case 'toPass':
         if (arrived) { sv.mode = 'picking'; sv.pickT = 0; sv.idleDir = 'back'; }
@@ -576,15 +604,19 @@ export class Business {
           sv.carry = this.pass.shift();
           if (!sv.carry) { sv.mode = 'idle'; break; }
           sv.mode = 'delivering';
-          sv.path = [{ x: sv.x, y: HALL_TOP }, sv.carry.c.table.serve];
+          sv.path = this.walk({ x: sv.x, y: HALL_TOP }, sv.carry.c.table.serve);
         }
         break;
       case 'delivering':
-        if (arrived) {
+        if (arrived) { sv.mode = 'handing'; sv.handT = 0; sv.idleDir = sv.carry.c.table.serve.face || 'back'; }
+        break;
+      case 'handing': // 손님 상 앞에서 테이블 쪽을 보고 내려놓기
+        sv.handT += dt;
+        if (sv.handT >= 0.3) {
           this.serve(sv.carry.c, sv.carry.grade);
           sv.carry = null;
           sv.mode = 'returning';
-          sv.path = [{ x: sv.x, y: HALL_TOP }, sv.home];
+          sv.path = this.walk(sv, sv.home);
         }
         break;
       case 'returning':
@@ -605,7 +637,7 @@ export class Business {
         const c = this.customers.find((x) => x.state === 'rowdy' && !x.handledBy);
         if (!c) break;
         c.handledBy = gd; gd.target = c; gd.mode = 'going';
-        gd.path = [{ x: gd.x, y: AISLE_Y }, { x: c.table.serve.x, y: AISLE_Y }, { x: c.table.serve.x, y: c.table.serve.y }];
+        gd.path = this.walk(gd, c.table.serve);
         this.log(`🛡️ ${gd.def.name} 출동!`);
         break;
       }
