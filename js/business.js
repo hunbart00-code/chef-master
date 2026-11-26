@@ -14,7 +14,7 @@ const EAT_TIME = 4.0;
 const BASE_PATIENCE = 32;
 const ROWDY_TIME = 18;
 const CALM_TIME = 1.8;
-const COOK_TIME = 0.9;
+const COOK_TIME = 1.6;            // 화구에서 음식이 익는 모습이 보이도록
 const CHEF_SWEEP_TIME = 1.5;
 const OPEN_HOUR = 11, CLOSE_HOUR = 21;
 
@@ -113,7 +113,7 @@ export class Business {
     this.chef = this.chef || this.actor(look, CHEF_HOME, 120, 'dir4');
     if (this.chef.mode === 'idle' || !this.chef.mode) { this.chef.x = CHEF_HOME.x; this.chef.y = CHEF_HOME.y; this.chef.path = []; }
     this.chef.sheet = look;
-    Object.assign(this.chef, { tasks: this.chef.tasks || [], mode: this.chef.mode || 'idle', idleDir: 'back' });
+    Object.assign(this.chef, { tasks: this.chef.tasks || [], mode: this.chef.mode || 'idle', idleDir: 'front' });
     this.pass = this.pass || [];
     const cl = staffOf(this.state, 'cleaner');
     const sv = staffOf(this.state, 'server');
@@ -450,7 +450,7 @@ export class Business {
     const arrived = this.move(ch, dt);
     switch (ch.mode) {
       case 'idle':
-        ch.idleDir = dist(ch, CHEF_HOME) < 2 ? 'back' : 'front';
+        ch.idleDir = 'front'; // 주방에서 정면을 보고 대기
         if (!ch.tasks.length) break;
         ch.task = ch.tasks.shift();
         if (ch.task.type === 'escort') {
@@ -500,10 +500,10 @@ export class Business {
         break;
       case 'cooking':
         ch.cook += dt;
-        if (Math.random() < dt * 14) this.steam(true);
+        if (Math.random() < dt * 14) { const b = this.burnerPos(); this.particles.push({ kind: 'steam', x: b.x + rand(-5, 5), y: b.y - 8, vx: rand(-1, 1), vy: -rand(8, 14), life: 0, max: 0.9 }); }
         if (ch.cook >= COOK_TIME) {
           const { grade } = ch.task;
-          const pan = this.panPos();
+          const pan = this.burnerPos();
           if (grade === 3) { this.sparkle(pan.x, pan.y, 6); this.sfx?.play('perfect'); }
           else if (grade === 1) { this.smoke(pan.x, pan.y, 8); this.sfx?.play('bad'); }
           else this.sfx?.play('tap');
@@ -735,9 +735,11 @@ export class Business {
   cook(c) {
     c.state = 'cooking';
     this.paused = true;
+    this.cookPreview = c.menuId; // 문제 푸는 동안에도 화구에 재료가 올라가 있음
     const m = MENUS[c.menuId];
     this.hooks.openQuiz({ title: `${m.icon} ${m.name} 요리 중!`, engBoost: this.forecast.engBoost || 0 }, (correct, total) => {
       this.paused = false;
+      this.cookPreview = null;
       this.last = performance.now();
       this.stats.quizCorrect += correct;
       this.stats.quizTotal += total;
@@ -809,6 +811,37 @@ export class Business {
   }
 
   // ---------- 이펙트 ----------
+  // 화구 왼쪽 버너 (음식이 올라가는 자리)
+  burnerPos() { const s = px('stove'); return { x: APPL.stove - 12, y: KITCHEN_Y - (s ? s.height : 36) + 17 }; }
+
+  drawStoveCooking() {
+    const ch = this.chef;
+    const cooking = ch.mode === 'cooking' && ch.task;
+    const menuId = cooking ? ch.task.c.menuId : this.cookPreview;
+    if (!menuId) return;
+    const g = this.px;
+    const b = this.burnerPos();
+    const k = cooking ? ch.cook / COOK_TIME : 0;
+    const burnt = cooking && ch.task.grade === 1 && k > 0.6;
+    // 불꽃
+    const fl = Math.floor(this.clock * 12) % 3;
+    for (let i = -4; i <= 4; i += 4) {
+      g.fillStyle = (i / 4 + fl) % 2 ? '#ffb020' : '#ff5a1f';
+      g.fillRect(Math.round(b.x + i + this.ox), Math.round(b.y - 1 - ((i / 4 + fl) % 2) + this.oy), 2, 2);
+    }
+    // 팬 + 음식 (보글보글 튀어오름)
+    g.fillStyle = '#1a0e08'; g.fillRect(Math.round(b.x - 9 + this.ox), Math.round(b.y - 3 + this.oy), 18, 3);
+    g.fillStyle = '#3a3a44'; g.fillRect(Math.round(b.x - 8 + this.ox), Math.round(b.y - 3 + this.oy), 16, 2);
+    g.fillRect(Math.round(b.x + 8 + this.ox), Math.round(b.y - 3 + this.oy), 6, 1);
+    const hop = cooking ? -(Math.floor(this.clock * 10) % 2) : 0;
+    this.spr(burnt ? 'dish_burnt' : DISH_PX[menuId], b.x, b.y - 2 + hop);
+    // 말풍선: 지금 만드는 음식 + 조리 게이지
+    const by = b.y - 18;
+    this.bubble(b.x, by, this.bubbleWOf(menuId), 15, '#1a0f0a', '#fff3c4');
+    this.spr(DISH_PX[menuId], b.x, by - 2);
+    if (cooking) this.pbar(b.x, by - 20, 18, k, burnt ? '#e0533d' : '#ff9a3d');
+  }
+
   panPos() { const s = px('stove'); return { x: APPL.stove + 6, y: KITCHEN_Y - (s ? s.height : 30) + 6 }; }
   steam(strong) { const p = this.panPos(); this.particles.push({ kind: 'steam', x: p.x + rand(-4, 4), y: p.y, vx: rand(-1, 1), vy: -rand(6, 12), life: 0, max: strong ? 1 : 1.5 }); }
   sparkle(x, y, n) { for (let i = 0; i < n; i++) this.particles.push({ kind: 'spark', x: x + rand(-10, 10), y: y + rand(-6, 4), vx: rand(-6, 6), vy: -rand(4, 14), life: 0, max: rand(0.5, 1) }); }
@@ -841,7 +874,7 @@ export class Business {
     const add = (y, fn) => items.push({ y, fn });
     add(KITCHEN_Y, () => this.spr('rack', APPL.rack, KITCHEN_Y));
     add(KITCHEN_Y, () => this.spr('fridge', APPL.fridge, KITCHEN_Y));
-    add(KITCHEN_Y, () => this.spr('stove', APPL.stove, KITCHEN_Y));
+    add(KITCHEN_Y, () => { this.spr('stove', APPL.stove, KITCHEN_Y); this.drawStoveCooking(); });
     add(BAR.base, () => this.drawBar());
     for (const x of STOOLS) add(134, () => this.spr('stool2', x, 134));
     for (const e of APPL.extra || []) add(KITCHEN_Y, () => this.spr(e.name, e.x, KITCHEN_Y));
@@ -1058,6 +1091,8 @@ export class Business {
     return c.y - (s ? s.height : 24) + 2;
   }
 
+  bubbleWOf(menuId) { const s = px(DISH_PX[menuId]); return Math.max(18, (s ? s.width : 14) + 4); }
+
   bubbleW(c) { const s = px(DISH_PX[c.menuId]); return Math.max(18, (s ? s.width : 14) + 4); }
 
   drawCustomerUI(c) {
@@ -1088,7 +1123,6 @@ export class Business {
 
   drawBars() {
     const ch = this.chef;
-    if (ch.mode === 'cooking') this.pbar(ch.x, ch.y - 32, 16, ch.cook / COOK_TIME, '#ff9a3d');
     if (ch.mode === 'sweeping') this.pbar(ch.x, ch.y - 32, 16, ch.sweepT / CHEF_SWEEP_TIME, '#6bd35f');
     if (ch.mode === 'calming') this.pbar(ch.x, ch.y - 32, 16, ch.calmT / CALM_TIME, '#ffc83d');
     const cl = this.cleaner;
