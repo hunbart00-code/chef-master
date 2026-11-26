@@ -100,6 +100,8 @@ export class Business {
           seat: { x: c.x + ox, y: c.y + (long ? 6 : 8) },
           serve: { x: c.x + (long ? ox : 2), y: AISLE_Y, face: c.y < AISLE_Y ? 'back' : 'front' }, // 상 앞 통로에서 서빙
           trashPos: { x: c.x + (long ? ox / 2 : 1), y: c.y + 2 },
+          // 상판 위 음식 자리 (바닥 y): 2인 상은 가운데, 4인 긴 상은 손님마다 위·아래
+          dishPos: long ? { x: c.x + (ox < 0 ? -2 : 2), y: c.y + (ox < 0 ? -9 : 2) } : { x: c.x, y: c.y + 1 },
         });
       }
     }
@@ -154,7 +156,7 @@ export class Business {
     } else {
       // 테이블이 없으면 바 앞에 서서 시식
       const spot = { x: Math.round((BAR.x0 + BAR.x1) / 2), y: HALL_TOP };
-      c.table = { seat: spot, serve: spot, trashPos: { x: spot.x, y: BAR.top + 6 }, base: HALL_TOP, cust: c };
+      c.table = { seat: spot, serve: spot, trashPos: { x: spot.x, y: BAR.top + 6 }, dishPos: { x: spot.x, y: BAR.top + 9 }, base: HALL_TOP, cust: c };
       c.path = this.entryPath(spot);
     }
     this.customers.push(c);
@@ -882,7 +884,7 @@ export class Business {
     add(112, () => this.spr('pos', POS_X, 112));
     for (const tb of this.tables) add(tb.base, () => this.spr(ITEM_PX[tb.type], tb.cx, tb.base));
     for (const s of this.seats) {
-      if (s.dish) add(s.base + 0.5, () => this.spr(s.dish.sprite, s.trashPos.x, s.trashPos.y + 4));
+      if (s.dish) add(s.base + 0.5, () => this.spr(s.dish.sprite, s.dishPos.x, s.dishPos.y));
       if (s.trash) add(s.base + 0.6, () => this.drawTrash(s));
     }
     for (const d of this.decos) add(d.y, () => this.spr(ITEM_PX[d.type], d.x, d.y));
@@ -972,7 +974,7 @@ export class Business {
   }
 
   drawTrash(s) {
-    this.spr('trash', s.trashPos.x, s.trashPos.y + 6);
+    this.spr('trash', s.dishPos.x, s.dishPos.y + 1);
     if (!s.reserved && !this.cleaner) {
       const g = this.px;
       const bob = Math.floor(this.clock * 3) % 2;
