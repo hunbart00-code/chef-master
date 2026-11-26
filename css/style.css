@@ -135,7 +135,7 @@ img.pximg { image-rendering: pixelated; vertical-align: middle; }
 .stock-chip.zero { opacity: 0.35; }
 .bb-hint { flex: 0 0 170px; font-size: 12px; line-height: 1.35; color: var(--cream-dim); white-space: normal; }
 .tray { display: flex; gap: 4px; align-items: center; }
-.tray-item { cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px 5px; border-radius: 4px; background: rgba(0, 0, 0, 0.25); border: 2px solid transparent; min-width: 64px; }
+.tray-item { cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px 5px; border-radius: 4px; background: rgba(0, 0, 0, 0.25); border: 2px solid transparent; min-width: 88px; }
 .tray-item.selected { border-color: var(--green); background: rgba(140, 255, 134, 0.15); }
 .tray-item.empty img { opacity: 0.45; }
 .tray-item > b { font-size: 11px; color: var(--gold); }
@@ -367,3 +367,7 @@ img.pximg { image-rendering: pixelated; vertical-align: middle; }
 .danger-zone { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; opacity: 0.8; }
 
 #hudTR #btnLogout { min-height: 34px; font-size: 13px; }
+
+.tray-item i.buff { font-style: normal; font-size: 10px; color: var(--green); white-space: nowrap; }
+.tray-info { max-width: 190px; line-height: 1.35; }
+.tray-info b { color: var(--gold); }

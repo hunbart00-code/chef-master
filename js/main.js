@@ -7,7 +7,7 @@ import {
   branchMenus, cookableCount, anyCookable, menuPrice, isBankrupt, settleDay, decoBonus, tablesOf,
   INGREDIENTS, MENUS, ITEMS, FRIDGE_LEVELS, RESCUE_BASE, RESCUE_PER_CORRECT, won,
   hireStaff, fireStaff, staffOf, totalWages, sellIngredient, clearFridge, missingHint, setSaveScope,
-  expandShop, nextShopLevel,
+  expandShop, nextShopLevel, buffSummary,
 } from './shop-engine.js';
 import { SHOP_LEVELS, gridOf } from './shop-levels.js';
 import { tryLogin, createAccount, lastLogin } from './account.js';
@@ -524,6 +524,8 @@ function startEdit() {
   scene.edit = {};
   showBar('edit');
   renderTray();
+  scene.editPad = Math.ceil(($('#bottomBar').offsetHeight + 12) / scene.s) - 12;
+  scene.resize();
 }
 
 function endEdit() {
@@ -531,6 +533,7 @@ function endEdit() {
   scene.hoverSlot = null;
   layoutSelected = null;
   showBar('prep');
+  scene.resize();
   persist();
   refreshPrep();
 }
@@ -539,10 +542,10 @@ function renderTray() {
   $('#tray').innerHTML = Object.entries(ITEMS).map(([type, it]) => {
     const inv = state.inventory[type] || 0;
     return `<span class="tray-item ${layoutSelected === type ? 'selected' : ''} ${inv ? '' : 'empty'}" data-select="${type}" title="${it.name}: ${it.desc}">
-      ${pxImg(ITEM_PX[type], 1)}<b>${inv}</b>
+      ${pxImg(ITEM_PX[type], 1)}<b>${inv}</b><i class="buff">${it.buffText || ''}</i>
       <button class="px-btn tiny" data-buyitem="${type}">${won(it.price)}</button>
     </span>`;
-  }).join('') + `<span class="tray-info">테이블 ${tablesOf(state).length} · 자리 ${state.layout.length}/${gridOf(state).cols * gridOf(state).rows}<br>별점 +${decoBonus(state).toFixed(2)}</span>`;
+  }).join('') + `<span class="tray-info">칸 ${state.layout.length}/${gridOf(state).cols * gridOf(state).rows}<br><b>버프</b> ${buffSummary(state)}</span>`;
 }
 
 function onSlot(gx, gy) {
@@ -552,6 +555,7 @@ function onSlot(gx, gy) {
     sfx.play('tap');
   } else if (layoutSelected && state.inventory[layoutSelected]) {
     placeItem(state, layoutSelected, gx, gy);
+    if (ITEMS[layoutSelected].buffText) toast(`${ITEMS[layoutSelected].name} 배치! ${ITEMS[layoutSelected].buffText}`);
     if (!state.inventory[layoutSelected]) layoutSelected = null;
     sfx.play('tap');
   } else {

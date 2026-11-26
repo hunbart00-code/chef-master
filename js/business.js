@@ -4,7 +4,7 @@
 // 규칙: 손님 입장·주문·인내심·요리(퀴즈, 시간 정지)·★1~3·식사·결제·쓰레기·진상 손님·종업원 AI
 import {
   MENUS, ITEMS, GRADE, TIP_RATE, tablesOf, branchMenus, canCook, anyCookable,
-  consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf,
+  consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf, furnitureBuffs,
 } from './shop-engine.js';
 import { geometry, levelOf } from './shop-levels.js';
 import { px, roomFor, DISH_PX, ITEM_PX } from './px.js';
@@ -122,7 +122,8 @@ export class Business {
     this.cleaner = cl ? keep(this.cleaner, cl) || Object.assign(this.actor(cl.id, HOMES.cleaner, cl.speed * 0.5, 'single'), { def: cl, home: HOMES.cleaner, mode: 'idle', tasks: [] }) : null;
     this.server = sv ? keep(this.server, sv) || Object.assign(this.actor(`server${sv.tier}`, HOMES.server, sv.speed * 0.5, 'dir4'), { def: sv, home: HOMES.server, mode: 'idle' }) : null;
     this.guard = gd ? keep(this.guard, gd) || Object.assign(this.actor(gd.id, HOMES.guard, gd.speed * 0.5, 'single'), { def: gd, home: HOMES.guard, mode: 'idle' }) : null;
-    this.patienceMult = sv ? sv.patienceMult : 1;
+    this.buffs = furnitureBuffs(this.state);
+    this.patienceMult = (sv ? sv.patienceMult : 1) / (1 + this.buffs.patience);
     this.staffList = [this.cleaner, this.server, this.guard].filter(Boolean);
   }
 
@@ -198,6 +199,8 @@ export class Business {
     this.vw = vw; this.vh = vh;
     this.ox = Math.floor((vw - RW) / 2);
     this.oy = Math.max(0, Math.min(Math.floor((vh - RH) / 2), vh - RH - BAR_H + 16));
+    // 배치 중에는 아래 가구 트레이에 가리지 않게 화면을 위로 올림
+    if (this.edit && this.editPad) this.oy = Math.max(-56, Math.min(this.oy, vh - RH - this.editPad));
     this.pxCanvas.width = vw; this.pxCanvas.height = vh;
     this.pxCanvas.style.width = `${vw * s}px`; this.pxCanvas.style.height = `${vh * s}px`;
     const dpr = window.devicePixelRatio || 1;
@@ -318,7 +321,7 @@ export class Business {
   // ---------- 손님 ----------
   spawn() {
     const n = Math.max(1, this.seats.length);
-    const interval = rand(6.5, 10.5) * Math.sqrt(2 / n) / (this.forecast.spawnMult || 1);
+    const interval = rand(6.5, 10.5) * Math.sqrt(2 / n) / (this.forecast.spawnMult || 1) / (1 + this.buffs.visit);
     this.spawnTimer = Math.max(2, interval);
     const free = this.seats.filter((t) => !t.cust && !t.trash);
     if (!free.length) { this.spawnTimer = 2; return; }
@@ -440,15 +443,13 @@ export class Business {
         break;
       case 'toRowdy':
         if (ch.task.c.state !== 'rowdy') { ch.mode = 'returning'; ch.path = this.route(ch, CHEF_HOME); break; }
-        if (arrived) { ch.mode = 'calming'; ch.calmT = 0; ch.idleDir = 'back'; this.float(ch.x, ch.y - 30, '손님, 진정하세요~', '#9ad0ff'); }
+        if (arrived) { ch.mode = 'calming'; ch.calmT = 0; ch.idleDir = 'back'; }
         break;
       case 'calming': {
         const c = ch.task.c;
         ch.calmT += dt;
         if (ch.calmT >= CALM_TIME) {
           this.stats.rowdyHandled++;
-          this.float(c.x, c.y - 34, '흥! 다신 안 와!', '#ff8a7a');
-          this.log('🤝 사장님이 진상 손님을 문밖까지 배웅했어요!');
           // 손님과 나란히 문까지 걸어감
           this.leave(c, false);
           c.handledBy = null;
@@ -462,7 +463,6 @@ export class Business {
       }
       case 'escorting':
         if (arrived) {
-          this.float(ch.x, ch.y - 30, '안녕히 가세요~', '#9ad0ff');
           ch.speed = ch.walkSpeed || 120;
           ch.mode = 'returning';
           ch.path = this.route(ch, CHEF_HOME);
@@ -677,11 +677,10 @@ export class Business {
       if (this.busy) { this.toast(`지금은 ${this.busy.label} 중이에요!`); return; }
       this.cook(c);
     } else if (c.state === 'rowdy') {
-      if (c.handledBy) { this.toast(c.handledBy === 'chef' ? '사장님이 가고 있어요!' : '경호원이 처리 중이에요!'); return; }
+      if (c.handledBy) return;
       c.handledBy = 'chef';
       this.chef.tasks.unshift({ type: 'escort', c });
       this.sfx?.play('tap');
-      this.log('🙇 사장님이 진상 손님을 달래러 가요.');
     }
   }
 
@@ -691,7 +690,7 @@ export class Business {
       this.toast(`${this.cleaner.def.name}이(가) 곧 치울 거예요! 🧹`);
       return;
     }
-    if (t.reserved) { this.toast('사장님이 치우러 가고 있어요! 🧹'); return; }
+    if (t.reserved) return;
     t.reserved = true; t.reservedBy = 'chef';
     this.chef.tasks.push({ type: 'clean', t });
     this.sfx?.play('tap');
@@ -731,7 +730,7 @@ export class Business {
   pay(c) {
     const base = menuPrice(this.state, c.menuId);
     const price = Math.round(base * GRADE[c.grade].mult * (1 + (this.promo || 0)) / 10) * 10;
-    const tipBonus = 1 + (this.server ? this.server.def.tipBonus : 0);
+    const tipBonus = 1 + (this.server ? this.server.def.tipBonus : 0) + this.buffs.tip;
     const tip = c.grade === 3 ? Math.round(base * TIP_RATE * (this.forecast.tipMult || 1) * tipBonus / 10) * 10 : 0;
     this.state.money += price + tip;
     this.stats.revenue += price;
@@ -1069,7 +1068,6 @@ export class Business {
     const X = (x) => (x + this.ox) * k, Y = (y) => (y + this.oy) * k;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    if (this.chef.tasks.length) this.tag(g, X(this.chef.x), Y(this.chef.y - 40), `할 일 ${this.chef.tasks.length}`, '#3d6fb0');
     if (this.mode === 'visit') {
       for (const c of this.customers) if (c.visitor && c.state !== 'leave') this.tag(g, X(c.x), Y(this.headY(c) - (['enter', 'leave'].includes(c.state) ? 6 : c.state === 'ate' ? 4 : 22)), `${c.visitorName} (나)`, '#2f7a2c');
     }
@@ -1079,12 +1077,10 @@ export class Business {
       for (const t of this.seats) {
         if (!t.trash) continue;
         if (this.cleaner) continue;
-        if (t.reserved) this.tag(g, X(t.trashPos.x), Y(t.trashPos.y - 16), '사장님이 치우러 가요', '#5a3a22');
-        else this.tag(g, X(t.trashPos.x), Y(t.trashPos.y - 22) + bob, '🧹 눌러서 청소!', '#c0392b');
+        if (!t.reserved) this.tag(g, X(t.trashPos.x), Y(t.trashPos.y - 22) + bob, '🧹 눌러서 청소!', '#c0392b');
       }
       for (const c of this.customers) {
         if (c.state !== 'rowdy' || this.busy?.target === c) continue;
-        if (c.handledBy === 'chef') { this.tag(g, X(c.x), Y(this.headY(c) - 30), this.chef.mode === 'calming' ? '진정시키는 중…' : '사장님 가는 중!', '#5a3a22'); continue; }
         if (c.handledBy) continue;
         this.tag(g, X(c.x), Y(this.headY(c) - 30) + bob, '😡 눌러서 진정!', '#8e24aa');
       }

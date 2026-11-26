@@ -1,6 +1,6 @@
 // 가게 상태·경제·저장 엔진 (localStorage 단독 모드, 3차에서 Firestore 연동)
 import { INGREDIENTS, MENUS, BRANCHES, FORECASTS, menuCost } from './data-menus.js';
-import { ITEMS, FRIDGE_LEVELS, DECO_BONUS_CAP } from './data-interior.js';
+import { ITEMS, FRIDGE_LEVELS, DECO_BONUS_CAP, BUFF_CAP } from './data-interior.js';
 import { SHOP_LEVELS, gridOf } from './shop-levels.js';
 import { staffTier } from './data-staff.js';
 
@@ -256,6 +256,29 @@ export function pickupItem(state, x, y) {
   const [it] = state.layout.splice(i, 1);
   state.inventory[it.type] = (state.inventory[it.type] || 0) + 1;
   return it.type;
+}
+
+// 놓인 가구마다 버프가 쌓임 (종류별 최대치 있음)
+export function furnitureBuffs(state) {
+  const b = { patience: 0, tip: 0, visit: 0, seats: 0 };
+  for (const it of state.layout || []) {
+    const def = ITEMS[it.type];
+    if (!def) continue;
+    if (def.kind === 'table') b.seats += def.seats || 1;
+    for (const [k, v] of Object.entries(def.buff || {})) b[k] += v;
+  }
+  for (const k of Object.keys(BUFF_CAP)) b[k] = Math.min(BUFF_CAP[k], b[k]);
+  return b;
+}
+
+export function buffSummary(state) {
+  const b = furnitureBuffs(state);
+  const out = [`자리 ${b.seats}`];
+  if (b.patience) out.push(`인내심 +${Math.round(b.patience * 100)}%`);
+  if (b.tip) out.push(`팁 +${Math.round(b.tip * 100)}%`);
+  if (b.visit) out.push(`방문 +${Math.round(b.visit * 100)}%`);
+  out.push(`별점 +${decoBonus(state).toFixed(2)}`);
+  return out.join(' · ');
 }
 
 export function decoBonus(state) {
