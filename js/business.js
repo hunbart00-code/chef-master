@@ -8,6 +8,7 @@ import {
 } from './shop-engine.js';
 import { geometry, levelOf } from './shop-levels.js';
 import { px, roomFor, DISH_PX, ITEM_PX } from './px.js';
+import { chefSheetOf } from './chef-maker.js';
 
 export const DAY_LENGTH = 150;      // 실제 초 (2분 30초)
 const EAT_TIME = 4.0;
@@ -111,7 +112,7 @@ export class Business {
     });
 
     // 사장님 + 종업원
-    const look = this.state.chefLook || 'chef_m';
+    const look = chefSheetOf(this.state);
     this.chef = this.chef || this.actor(look, CHEF_HOME, 120, 'dir4');
     if (this.chef.mode === 'idle' || !this.chef.mode) { this.chef.x = CHEF_HOME.x; this.chef.y = CHEF_HOME.y; this.chef.path = []; }
     this.chef.sheet = look;

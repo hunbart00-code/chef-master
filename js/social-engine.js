@@ -160,7 +160,7 @@ export const RANKINGS = {
 export function ranking(me, kind) {
   const R = RANKINGS[kind];
   const rows = [{ ...me, id: me.accountId, isMe: true }, ...listClassmates(me)]
-    .map((s) => ({ id: s.id, name: s.name, isMe: !!s.isMe, demo: !!s.demo, chefLook: s.chefLook, v: R.value(s), label: R.fmt(R.value(s), s), day: s.day }))
+    .map((s) => ({ id: s.id, name: s.name, isMe: !!s.isMe, demo: !!s.demo, chefLook: s.chefLook, chefStyle: s.chefStyle, v: R.value(s), label: R.fmt(R.value(s), s), day: s.day }))
     .sort((a, b) => b.v - a.v);
   rows.forEach((r, i) => { r.rank = i > 0 && rows[i - 1].v === r.v ? rows[i - 1].rank : i + 1; });
   return rows;

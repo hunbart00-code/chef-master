@@ -20,6 +20,7 @@ import { sfx } from './sfx.js';
 import { loadSprites, spriteImg } from './sprites.js';
 import { ING_SPRITE } from './sprite-atlas.js';
 import { loadPx, pxImg, DISH_PX, ITEM_PX } from './px.js';
+import { CHEF_PARTS, CHEF_PART_LABEL, defaultChefStyle, randomChefStyle, registerChef, chefSheetOf } from './chef-maker.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -30,6 +31,8 @@ let settings = loadSettings();
 let panelKind = null;
 let layoutSelected = null;
 let chefLook = 'chef_m';
+let chefStyle = defaultChefStyle();
+let editStyle = null;
 let pendingLogin = null;
 let visiting = null;
 let visitTasted = false;
@@ -138,10 +141,8 @@ function initTitle() {
   ensureForecast(preview);
   makeScene(preview);
 
-  $$('.chef-opt').forEach((b) => {
-    b.innerHTML = `${pxImg(`${b.dataset.look}_front`, 3)}<span>${b.dataset.look === 'chef_m' ? '남자 셰프' : '여자 셰프'}</span>`;
-    b.onclick = () => { chefLook = b.dataset.look; $$('.chef-opt').forEach((x) => x.classList.toggle('selected', x === b)); };
-  });
+  chefStyle = randomChefStyle();
+  bindCustomizer($('#chefCustomNew'), () => chefStyle, (s) => { chefStyle = s; });
   const form = () => ({ ban: $('#selBan').value, no: $('#selNo').value, name: $('#inpName').value.trim(), code: $('#inpCode').value.trim() });
   $('#btnLogin').onclick = () => {
     const f = form();
@@ -152,11 +153,13 @@ function initTitle() {
       $('#newShopWho').textContent = `${f.ban}반 ${f.no}번 ${f.name},`;
       $('#loginForm').hidden = true;
       $('#newShopStep').hidden = false;
+      $('#titleCard').classList.add('wide-custom');
+      renderCustomizer($('#chefCustomNew'), chefStyle);
       return;
     }
     enterAccount(r.id, f);
   };
-  $('#btnBack').onclick = () => { pendingLogin = null; $('#loginForm').hidden = false; $('#newShopStep').hidden = true; };
+  $('#btnBack').onclick = () => { pendingLogin = null; $('#loginForm').hidden = false; $('#newShopStep').hidden = true; $('#titleCard').classList.remove('wide-custom'); };
   $('#btnNew').onclick = () => {
     if (!pendingLogin) return;
     const id = createAccount(pendingLogin);
@@ -171,7 +174,7 @@ function enterAccount(id, f, isNew = false) {
   setSaveScope(id);
   engine.useScope(id);
   let s = loadShop();
-  if (!s) { s = newShop(f.name); s.chefLook = chefLook; }
+  if (!s) { s = newShop(f.name); s.chefStyle = { ...chefStyle }; }
   Object.assign(s, { accountId: id, ban: Number(f.ban), no: Number(f.no), name: f.name });
   saveShop(s);
   startGame(s);
@@ -246,7 +249,7 @@ function refreshPrep() {
 }
 
 // ---------- 팝업 패널 ----------
-const PANEL_TITLES = { ing: '🛒 식재료 구매', staff: '👥 종업원 고용', kitchen: '🏗️ 가게 확장 · 주방 설비', friends: '🏘️ 친구 가게', rank: '🏆 학급 랭킹' };
+const PANEL_TITLES = { chef: '🎨 셰프 꾸미기', ing: '🛒 식재료 구매', staff: '👥 종업원 고용', kitchen: '🏗️ 가게 확장 · 주방 설비', friends: '🏘️ 친구 가게', rank: '🏆 학급 랭킹' };
 
 function openPanel(kind) {
   if (kind === 'layout') { closePanel(); startEdit(); return; }
@@ -271,8 +274,49 @@ function renderPanel() {
   if (panelKind === 'ing') body.innerHTML = ingredientsHtml();
   if (panelKind === 'staff') body.innerHTML = staffHtml();
   if (panelKind === 'kitchen') body.innerHTML = kitchenHtml();
+  if (panelKind === 'chef') {
+    body.innerHTML = '<div class="chef-custom" id="chefCustomEdit"></div><div class="row-end"><button class="px-btn small" data-chef-cancel>취소</button><button class="px-btn small go" data-chef-save>저장하기</button></div>';
+    renderCustomizer($('#chefCustomEdit'), editStyle);
+  }
   if (panelKind === 'friends') body.innerHTML = friendsHtml();
   if (panelKind === 'rank') body.innerHTML = rankHtml();
+}
+
+// ---------- 셰프 꾸미기 ----------
+function renderCustomizer(root, s) {
+  const key = registerChef(s);
+  const sw = (part, i, col) => `<button class="sw ${s[part] === i ? 'on' : ''}" data-part="${part}" data-v="${i}" style="background:${col}" title="${CHEF_PART_LABEL[part]}"></button>`;
+  const step = (part) => `<div class="cc-row"><span class="cc-lb">${CHEF_PART_LABEL[part]}</span>
+      <button class="px-btn tiny" data-part="${part}" data-d="-1">◀</button><b class="cc-val">${CHEF_PARTS[part][s[part]]}</b><button class="px-btn tiny" data-part="${part}" data-d="1">▶</button></div>`;
+  const swRow = (part) => `<div class="cc-row"><span class="cc-lb">${CHEF_PART_LABEL[part]}</span><span class="sws">${CHEF_PARTS[part].map((c, i) => sw(part, i, c)).join('')}</span></div>`;
+  root.innerHTML = `
+    <div class="cc-preview">${['front', 'right', 'back'].map((d) => pxImg(`${key}_${d}`, 5)).join('')}</div>
+    <div class="cc-opts">
+      ${step('hair')}${swRow('hairColor')}${swRow('skin')}${step('eyes')}${step('mouth')}${step('glasses')}${step('blush')}${swRow('apron')}
+      <button class="px-btn small" data-random>🎲 랜덤</button>
+    </div>`;
+}
+
+function customizerClick(b, cur) {
+  const s = { ...cur };
+  if (b.dataset.random !== undefined) Object.assign(s, randomChefStyle());
+  else {
+    const part = b.dataset.part, n = CHEF_PARTS[part].length;
+    if (b.dataset.v !== undefined) s[part] = Number(b.dataset.v);
+    else s[part] = (s[part] + Number(b.dataset.d) + n) % n;
+  }
+  sfx.play('tap');
+  return s;
+}
+
+function bindCustomizer(root, get, set) {
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-part],[data-random]');
+    if (!b) return;
+    const s = customizerClick(b, get());
+    set(s);
+    renderCustomizer(root, s);
+  });
 }
 
 // ---------- 친구 가게 ----------
@@ -283,7 +327,7 @@ function friendsHtml() {
     : '<span class="muted small">아직 받은 응원이 없어요. 친구 가게에 먼저 놀러 가 봐요!</span>';
   const friends = listClassmates(state).map((f) => `
     <div class="friend-card">
-      ${pxImg(`${f.chefLook || 'chef_m'}_front`, 2)}
+      ${pxImg(`${chefSheetOf(f)}_front`, 2)}
       <div class="fr-info"><b>${f.name}</b>${f.demo ? ' <span class="tag">체험</span>' : ''}<small>DAY ${f.day} · ★ ${(f.rating || 0).toFixed(1)} · 완벽 ${f.perfectCookCount || 0}</small></div>
       ${cheeredToday(state, f.id) ? '<span class="done">💌 응원함</span>' : ''}
       <button class="px-btn tiny go" data-visit="${f.id}">놀러가기</button>
@@ -304,7 +348,7 @@ function rankHtml() {
   const rows = ranking(state, rankKind).map((r) => `
     <div class="rank-row ${r.isMe ? 'me' : ''}">
       <span class="rk">${r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : r.rank}</span>
-      ${pxImg(`${r.chefLook || 'chef_m'}_front`, 1)}
+      ${pxImg(`${chefSheetOf(r)}_front`, 1)}
       <span class="rn">${r.name}${r.isMe ? ' (나)' : ''}${r.demo ? ' <span class="tag">체험</span>' : ''}</span>
       <b class="rv">${r.label}</b>
     </div>`).join('');
@@ -372,7 +416,7 @@ function ingredientsHtml() {
 }
 
 function staffHtml() {
-  let html = `<div class="staff-summary">${pxImg(`${state.chefLook || 'chef_m'}_front`, 2)}
+  let html = `<div class="staff-summary">${pxImg(`${chefSheetOf(state)}_front`, 2)}<button class="px-btn tiny go" data-open-chef>🎨 셰프 꾸미기</button>
       <span>직원이 없는 일은 사장님이 직접 해요.</span>
       <span class="wage-total">매일 일급 <b>${won(totalWages(state))}</b></span></div>`;
   for (const role of STAFF_ORDER) {
@@ -438,6 +482,23 @@ function bindPanel() {
       persist(); refreshPrep();
       return;
     }
+    if (e.target.closest('[data-open-chef]')) {
+      editStyle = { ...(state.chefStyle || defaultChefStyle()) };
+      openPanel('chef');
+      return;
+    }
+    if (e.target.closest('[data-chef-save]')) {
+      state.chefStyle = { ...editStyle };
+      persist(); scene.chef = null; scene.rebuild(); closePanel();
+      toast('새 셰프 모습으로 바꿨어요! 🎨');
+      return;
+    }
+    if (e.target.closest('[data-chef-cancel]')) { openPanel('staff'); return; }
+    if (panelKind === 'chef' && e.target.closest('[data-part],[data-random]')) {
+      editStyle = customizerClick(e.target.closest('[data-part],[data-random]'), editStyle);
+      renderCustomizer($('#chefCustomEdit'), editStyle);
+      return;
+    }
     const v = e.target.closest('[data-visit]');
     if (v) { visitFriend(v.dataset.visit); return; }
     const rk = e.target.closest('[data-rank]');
@@ -480,7 +541,7 @@ function bindPanel() {
     if (e.target.closest('[data-reset]')) {
       if (!(await confirmBox('정말 <b>DAY 1부터 다시</b> 시작할까요?<br><small>돈·가구·직원·기록이 모두 사라져요.</small>'))) return;
       if (!(await confirmBox('한 번 더 확인할게요. 되돌릴 수 없어요!'))) return;
-      const keep = { accountId: state.accountId, ban: state.ban, no: state.no, name: state.name, chefLook: state.chefLook };
+      const keep = { accountId: state.accountId, ban: state.ban, no: state.no, name: state.name, chefLook: state.chefLook, chefStyle: state.chefStyle };
       clearShop(); engine.reset();
       state = Object.assign(newShop(keep.name), keep);
       saveShop(state);

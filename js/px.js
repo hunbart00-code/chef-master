@@ -23,6 +23,8 @@ export async function loadPx() {
 }
 
 export const px = (name) => cache[name] || null;
+export const hasSprite = (name) => !!cache[name];
+export function setSprite(name, canvas) { cache[name] = canvas; delete urls[name]; }
 export const room = () => roomImg;
 
 /**
