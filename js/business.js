@@ -834,11 +834,6 @@ export class Business {
     g.fillRect(Math.round(b.x + 8 + this.ox), Math.round(b.y - 3 + this.oy), 6, 1);
     const hop = cooking ? -(Math.floor(this.clock * 10) % 2) : 0;
     this.spr(burnt ? 'dish_burnt' : DISH_PX[menuId], b.x, b.y - 2 + hop);
-    // 말풍선: 지금 만드는 음식 + 조리 게이지
-    const by = b.y - 18;
-    this.bubble(b.x, by, this.bubbleWOf(menuId), 15, '#1a0f0a', '#fff3c4');
-    this.spr(DISH_PX[menuId], b.x, by - 2);
-    if (cooking) this.pbar(b.x, by - 20, 18, k, burnt ? '#e0533d' : '#ff9a3d');
   }
 
   panPos() { return this.burnerPos(); }
