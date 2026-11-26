@@ -58,6 +58,8 @@ export class QuizUI {
     const q = this.q;
     this.renderDots();
     this.el.tag.innerHTML = `<span class="subj ${q.subject}">${q.subject === 'math' ? '수학' : '영어'}</span> ${q.label}`;
+    this.el.prompt.hidden = false;
+    this.root.querySelector('.quiz-timer').hidden = false;
     this.el.prompt.innerHTML = `<div>${q.subject === 'math' ? renderMath(q.prompt) : q.prompt}</div>`;
     this.el.feedback.hidden = true;
     this.el.choices.innerHTML = '';
@@ -203,7 +205,8 @@ export class QuizUI {
     this.el.feedback.hidden = true;
     this.el.choices.hidden = true;
     this.el.spell.hidden = true;
-    this.el.prompt.innerHTML = '';
+    this.el.prompt.hidden = true;
+    this.root.querySelector('.quiz-timer').hidden = true;
     this.el.tag.innerHTML = '';
     const r = this.el.result;
     r.hidden = false;

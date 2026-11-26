@@ -10,6 +10,8 @@ import { QuizUI } from './quiz-ui.js';
 import { Business } from './business.js';
 import { sfx } from './sfx.js';
 import { isFirebaseEnabled } from './firebase-config.js';
+import { loadSprites, spriteImg } from './sprites.js';
+import { DISH_SPRITE, ING_SPRITE, ITEM_SPRITE } from './sprite-atlas.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -131,9 +133,9 @@ function renderPrep() {
     const m = MENUS[id];
     const p = menuPrice(state, id);
     const n = cookableCount(state, id);
-    const needs = Object.entries(m.needs).map(([ing, k]) => `${INGREDIENTS[ing].icon}${k > 1 ? `×${k}` : ''}`).join(' ');
+    const needs = Object.entries(m.needs).map(([ing, k]) => `${spriteImg(ING_SPRITE[ing], 16)}${k > 1 ? `×${k}` : ''}`).join(' ');
     return `<div class="menu-row ${p > m.price ? 'bonus' : ''}">
-      <span class="mi">${m.icon}</span><span class="mn">${m.name}<small>${needs}</small></span>
+      <span class="mi">${spriteImg(DISH_SPRITE[id], 30)}</span><span class="mn">${m.name}<small>${needs}</small></span>
       <b>${won(p)}</b><span class="cnt ${n ? '' : 'zero'}">${n}인분</span></div>`;
   }).join('');
 
@@ -152,9 +154,9 @@ function renderIngredients() {
   $('#fridgeText').textContent = `${used}/${cap}칸`;
   const needed = new Set(branchMenus(state).flatMap((m) => Object.keys(MENUS[m].needs)));
   $('#ingList').innerHTML = Object.entries(INGREDIENTS).filter(([id]) => needed.has(id)).map(([id, ing]) => {
-    const usedBy = branchMenus(state).filter((m) => MENUS[m].needs[id]).map((m) => MENUS[m].icon).join('');
+    const usedBy = branchMenus(state).filter((m) => MENUS[m].needs[id]).map((m) => spriteImg(DISH_SPRITE[m], 16)).join('');
     return `<div class="ing-row">
-      <span class="ing-icon">${ing.icon}</span>
+      <span class="ing-icon">${spriteImg(ING_SPRITE[id], 40)}</span>
       <span class="ing-name">${ing.name}<small>${usedBy} 에 사용</small></span>
       <span class="ing-price">${won(ing.price)}</span>
       <span class="ing-have">보유 <b>${state.fridge.items[id] || 0}</b></span>
@@ -173,7 +175,7 @@ function renderLayout() {
   for (let y = 0; y < G; y++) {
     for (let x = 0; x < G; x++) {
       const it = state.layout.find((l) => l.x === x && l.y === y);
-      html += `<button class="lcell ${it ? ITEMS[it.type].kind : 'empty'}${(x + y) % 2 ? ' alt' : ''}" data-x="${x}" data-y="${y}">${it ? ITEMS[it.type].icon : ''}</button>`;
+      html += `<button class="lcell ${it ? ITEMS[it.type].kind : 'empty'}${(x + y) % 2 ? ' alt' : ''}" data-x="${x}" data-y="${y}">${it ? spriteImg(ITEM_SPRITE[it.type], ITEMS[it.type].kind === 'table' ? 44 : 48) : ''}</button>`;
     }
   }
   grid.innerHTML = html;
@@ -182,7 +184,7 @@ function renderLayout() {
     const inv = state.inventory[type] || 0;
     const placed = state.layout.filter((l) => l.type === type).length;
     return `<div class="item-row ${layoutSelected === type ? 'selected' : ''}">
-      <span class="item-icon">${it.icon}</span>
+      <span class="item-icon">${spriteImg(ITEM_SPRITE[type], 40)}</span>
       <span class="item-name">${it.name}<small>${it.desc} · 배치 ${placed}</small></span>
       <button class="btn small ${inv ? 'primary' : 'disabled'}" data-select="${type}" ${inv ? '' : 'disabled'}>배치 (${inv})</button>
       <button class="btn small" data-buyitem="${type}">구매 ${won(it.price)}</button>
@@ -195,7 +197,7 @@ function renderKitchen() {
   const next = FRIDGE_LEVELS[lv + 1];
   $('#kitchenPanel').innerHTML = `
     <div class="upgrade-card">
-      <span class="up-icon">🧊</span>
+      <span class="up-icon">${spriteImg('fridge', 56)}</span>
       <div class="up-info"><b>냉장고 Lv.${lv + 1}</b><p>보관 칸 ${state.fridge.capacity}칸${next ? ` → 다음 단계 ${next.capacity}칸` : ' (최대)'}</p></div>
       ${next ? `<button class="btn primary" id="btnFridgeUp">업그레이드 ${won(next.price)}</button>` : '<span class="muted">MAX</span>'}
     </div>
@@ -301,14 +303,13 @@ async function startBusiness() {
 
   persist();
   showScreen('biz');
-  $('#hallSign').textContent = `${BRANCHES[state.branch].icon} ${BRANCHES[state.branch].name} · DAY ${state.day}`;
+  $('#bizDayLabel').textContent = `DAY ${state.day} 영업 중 · ${BRANCHES[state.branch].name}`;
   $('#bizLog').innerHTML = '';
   $('#bizBanner').hidden = true;
   sfx.play('bell');
   biz = new Business({
     state,
-    grid: $('#hallGrid'),
-    actors: $('#actors'),
+    canvas: $('#hallCanvas'),
     side: {
       clock: $('#bizClock'), timeBar: $('#bizTimeBar'), revenue: $('#bizRevenue'), served: $('#bizServed'),
       perfect: $('#bizPerfect'), stock: $('#bizStock'), menu: $('#bizMenu'), log: $('#bizLog'), banner: $('#bizBanner'),
@@ -375,7 +376,8 @@ function showSettlement(stats) {
 }
 
 // ---------- 초기화 ----------
-function init() {
+async function init() {
+  try { await loadSprites(); } catch (e) { console.error('스프라이트 로드 실패', e); }
   initTitle();
   bindPrep();
   $('#btnCloseEarly').onclick = closeEarly;

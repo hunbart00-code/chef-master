@@ -47,7 +47,13 @@ export function newShop(name = '') {
 export function loadShop() {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if (s && s.version === 1) return { ...newShop(), ...s };
+    if (s && s.version === 1) {
+      // 구버전 가구 이름 이전 (lamp → trophy)
+      for (const it of s.layout || []) if (it.type === 'lamp') it.type = 'trophy';
+      if (s.inventory?.lamp) { s.inventory.trophy = (s.inventory.trophy || 0) + s.inventory.lamp; delete s.inventory.lamp; }
+      s.layout = (s.layout || []).filter((it) => ITEMS[it.type]);
+      return { ...newShop(), ...s };
+    }
   } catch (e) { /* ignore */ }
   return null;
 }

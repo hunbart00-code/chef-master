@@ -102,35 +102,31 @@
     <!-- 영업 -->
     <section id="screen-biz" class="screen">
       <div class="biz">
-        <div class="hall-wrap pixel-box">
-          <div class="hall-sign" id="hallSign">🏪 동네 분식집</div>
-          <div class="hall">
-            <div class="grid" id="hallGrid"></div>
-            <div class="actors" id="actors"></div>
+        <div class="biz-main">
+          <div class="stage-wrap"><canvas id="hallCanvas" aria-label="가게 화면: 손님 말풍선을 눌러 요리해요"></canvas></div>
+          <div class="kairo-bar">
+            <div class="kb-clock"><span class="kb-ico">🕐</span><b id="bizClock">11:00</b></div>
+            <div class="kb-time"><div class="kb-meter"><i id="bizTimeBar"></i></div><span id="bizDayLabel">DAY 1 영업 중</span></div>
+            <div class="kb-stat"><span>매출</span><b id="bizRevenue">0원</b></div>
+            <div class="kb-stat"><span>손님</span><b id="bizServed">0명</b></div>
+            <div class="kb-stat"><span>★3</span><b id="bizPerfect">0개</b></div>
+            <button class="btn small ghost" id="btnCloseEarly">🔒 마감</button>
           </div>
-          <div class="door">🚪 입구</div>
         </div>
         <aside class="biz-side">
-          <div class="pixel-box clock-box">
-            <div class="clock"><span>🕐</span><b id="bizClock">11:00</b></div>
-            <div class="meter time"><i id="bizTimeBar"></i></div>
-          </div>
-          <div class="pixel-box biz-stats">
-            <div><span>매출</span><b id="bizRevenue">0원</b></div>
-            <div><span>손님</span><b id="bizServed">0명</b></div>
-            <div><span>★3</span><b id="bizPerfect">0개</b></div>
-          </div>
-          <div class="pixel-box">
-            <h4>남은 재료로 만들 수 있는 양</h4>
+          <div class="kairo-panel">
+            <div class="kp-title">재고 (만들 수 있는 양)</div>
             <div class="stock" id="bizStock"></div>
           </div>
-          <div class="pixel-box">
-            <h4>메뉴판</h4>
+          <div class="kairo-panel">
+            <div class="kp-title">메뉴판</div>
             <div id="bizMenu" class="biz-menu"></div>
           </div>
           <div class="banner" id="bizBanner" hidden>⚠️ 재료가 모두 떨어졌어요!</div>
-          <ul class="log pixel-box" id="bizLog"></ul>
-          <button class="btn ghost small" id="btnCloseEarly">🔒 오늘 영업 마감하기</button>
+          <div class="kairo-panel log-panel">
+            <div class="kp-title">영업 일지</div>
+            <ul class="log" id="bizLog"></ul>
+          </div>
         </aside>
       </div>
     </section>

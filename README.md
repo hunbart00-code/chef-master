@@ -45,9 +45,14 @@ python3 -m http.server 8000
 ```
 index.html
 css/style.css
+assets/sprites.png   스프라이트 아틀라스 (원본 시트에서 자동 추출·배경 투명화)
+fonts/               Galmuri11 도트 폰트 (SIL OFL)
 js/
   main.js            화면 전환, 준비 UI, 정산, 저장
-  business.js        실시간 영업 루프 (손님·인내심·쓰레기·진상)
+  business.js        실시간 영업 루프 + Canvas 2.5D 매장 렌더링 (손님 이동·사장님 서빙·청소 알바·이펙트)
+  hall-scene.js      매장 정적 배경 (벽돌 벽·주방·마루 홀·유리문·보도·도로)
+  sprites.js         스프라이트 로더 + 도트 캐릭터/음식 생성기 (외곽선·음영 자동)
+  sprite-atlas.js    assets/sprites.png 좌표표, 메뉴·재료·가구 → 스프라이트 매핑
   quiz-ui.js         퀴즈 팝업 (3문제·30초·해설)
   quiz-engine.js     과목 비중, 중복 방지, 오답 재출제, 통계
   math-generator.js  수학 문제 무한 생성기
