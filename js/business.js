@@ -1093,13 +1093,11 @@ export class Business {
     const hy = this.headY(c);
     if (c.state === 'order') {
       const blink = Math.floor(this.clock * 3) % 2;
-      this.bubble(c.x, hy - 2, this.bubbleW(c), 15, blink ? '#e0533d' : OUT, '#fff7e0');
-      this.spr(DISH_PX[c.menuId], c.x, hy - 4);
+      this.spr(DISH_PX[c.menuId], c.x, hy - 3 - blink); // 배경 없이 음식만 통통
       const r = c.patience / c.maxPatience;
-      this.pbar(c.x, hy - 21, 16, r, r < 0.3 ? '#e0533d' : r < 0.6 ? '#ffc83d' : '#6bd35f');
+      this.pbar(c.x, hy - 19, 16, r, r < 0.3 ? '#e0533d' : r < 0.6 ? '#ffc83d' : '#6bd35f');
       if (r < 0.3) this.spr('angry', c.x + 11, hy - 10 - blink);
     } else if (c.state === 'cooking' || c.state === 'cooked') {
-      this.bubble(c.x, hy - 2, this.bubbleW(c), 15, OUT, '#fff3c4');
       this.px.globalAlpha = 0.45 + 0.3 * (Math.floor(this.clock * 4) % 2);
       this.spr(DISH_PX[c.menuId], c.x, hy - 4);
       this.px.globalAlpha = 1;
@@ -1108,10 +1106,9 @@ export class Business {
       this.pbar(c.x, hy - 1, 16, c.timer / EAT_TIME, '#5aa8ff');
     } else if (c.state === 'rowdy') {
       const blink = Math.floor(this.clock * 6) % 2;
-      this.bubble(c.x, hy - 2, 18, 15, '#a93421', '#ffd9d2');
       this.spr('angry', c.x, hy - 4 - blink);
-      if (this.busy?.target === c) this.pbar(c.x, hy - 21, 20, 1 - this.busy.left / this.busy.total, '#ffc83d');
-      else this.pbar(c.x, hy - 21, 16, c.timer / ROWDY_TIME, '#b35ae0');
+      if (this.busy?.target === c) this.pbar(c.x, hy - 19, 20, 1 - this.busy.left / this.busy.total, '#ffc83d');
+      else this.pbar(c.x, hy - 19, 16, c.timer / ROWDY_TIME, '#b35ae0');
     }
   }
 
