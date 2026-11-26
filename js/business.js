@@ -711,7 +711,8 @@ export class Business {
     if (tip) this.float(c.x, c.y - 26, `팁 +${won(tip)}`, '#ff9ac8', 'heart', false, 0.25);
     if (c.grade >= 2) for (let i = 0; i < (c.grade === 3 ? 3 : 1); i++) this.particles.push({ kind: 'icon', sprite: c.grade === 3 && i ? 'star' : 'heart', x: c.x + rand(-8, 8), y: c.y - 22, vx: rand(-3, 3), vy: -rand(14, 22), life: -i * 0.15, max: 1.3 });
     if (c.michelin) this.revealMichelin(c, tip);
-    this.sfx?.play(c.grade === 1 ? 'bad' : 'coin');
+    this.sfx?.play('receipt');
+    if (c.grade === 1) this.sfx?.play('bad');
     c.table.dish = null;
     this.leave(c, Math.random() < 0.8 * (this.cleaner ? this.cleaner.def.trashMult : 1));
   }
@@ -1043,6 +1044,18 @@ export class Business {
       for (const c of this.customers) if (c.visitor && c.state !== 'leave') this.tag(g, X(c.x), Y(this.headY(c) - (['enter', 'leave'].includes(c.state) ? 6 : c.state === 'ate' ? 4 : 22)), `${c.visitorName} (나)`, '#2f7a2c');
     }
     if (this.mode === 'business') {
+      const bob = Math.floor(this.clock * 3) % 2 ? -2 * this.dpr : 0;
+      // 직원이 없으면 아이들이 뭘 눌러야 하는지 바로 보이게
+      for (const t of this.seats) {
+        if (!t.trash) continue;
+        if (this.cleaner) continue;
+        if (t.reserved) this.tag(g, X(t.trashPos.x), Y(t.trashPos.y - 16), '사장님이 치우러 가요', '#5a3a22');
+        else this.tag(g, X(t.trashPos.x), Y(t.trashPos.y - 22) + bob, '🧹 눌러서 청소!', '#c0392b');
+      }
+      for (const c of this.customers) {
+        if (c.state !== 'rowdy' || this.busy?.target === c || c.handledBy) continue;
+        this.tag(g, X(c.x), Y(this.headY(c) - 30) + bob, '😡 눌러서 진정!', '#8e24aa');
+      }
       for (const c of this.customers) if (c.state === 'rowdy' && this.busy?.target === c) this.tag(g, X(c.x), Y(c.y - 50), '진정시키는 중…', '#5a3a22');
     }
     for (const f of this.floats) {
@@ -1066,7 +1079,7 @@ export class Business {
   }
 
   tag(g, x, y, text, bg) {
-    const size = Math.round(12 * this.dpr);
+    const size = Math.round(14 * this.dpr * Math.max(1, this.s / 3));
     g.font = `bold ${size}px Galmuri11, sans-serif`;
     const w = g.measureText(text).width + 10 * this.dpr;
     g.fillStyle = bg; g.fillRect(x - w / 2, y - size * 0.75, w, size * 1.5);

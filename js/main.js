@@ -128,8 +128,8 @@ function makeScene(st) {
 // ---------- 타이틀 ----------
 function initTitle() {
   $('#selRatio').value = settings.subjectRatio;
-  $('#selBan').innerHTML = Array.from({ length: 15 }, (_, i) => `<option value="${i + 1}">${i + 1}반</option>`).join('');
-  $('#selNo').innerHTML = Array.from({ length: 35 }, (_, i) => `<option value="${i + 1}">${i + 1}번</option>`).join('');
+  $('#selBan').innerHTML = Array.from({ length: 4 }, (_, i) => `<option value="${i + 1}">${i + 1}반</option>`).join('');
+  $('#selNo').innerHTML = Array.from({ length: 25 }, (_, i) => `<option value="${i + 1}">${i + 1}번</option>`).join('');
   const last = lastLogin();
   if (last) { $('#selBan').value = last.ban; $('#selNo').value = last.no; $('#inpName').value = last.name; }
 
@@ -181,6 +181,7 @@ function enterAccount(id, f, isNew = false) {
 // 로그아웃: 새로고침 없이 로그인 화면으로 (claude.ai 페이지 안에서는 새로고침이 막힐 수 있음)
 function logout() {
   if (state) saveShop(state);
+  sfx.bgm(null);
   closePanel();
   if (scene) { scene.edit = null; scene.hoverSlot = null; }
   layoutSelected = null;
@@ -218,6 +219,7 @@ function startGame(s) {
 // ---------- 준비 ----------
 function enterPrep() {
   visiting = null;
+  sfx.bgm('prep');
   ensureForecast(state);
   const fresh = pullIncomingCheers(state);
   for (const e of fresh) { const st = stickerById(e.sticker); feed(`💌 ${e.from}: ${st.icon} ${st.text}`); }
@@ -612,6 +614,7 @@ async function startBusiness() {
   showBar('biz');
   $('#feed').innerHTML = '';
   sfx.play('bell');
+  sfx.bgm('biz');
   scene.startDay();
 }
 
@@ -633,6 +636,7 @@ function renderStock() {
 
 function endBusiness(stats) {
   sfx.play('bell');
+  sfx.bgm('prep');
   toast('🔔 영업 종료!');
   setTimeout(() => showSettlement(stats), 900);
 }

@@ -25,8 +25,8 @@ export function lastLogin() {
 
 /** 입력 검사 → 오류 메시지 또는 null */
 export function validate({ ban, no, name, code }) {
-  if (!(Number(ban) >= 1 && Number(ban) <= 20)) return '반을 골라 주세요.';
-  if (!(Number(no) >= 1 && Number(no) <= 40)) return '번호를 골라 주세요.';
+  if (!(Number(ban) >= 1 && Number(ban) <= 4)) return '반을 골라 주세요.';
+  if (!(Number(no) >= 1 && Number(no) <= 25)) return '번호를 골라 주세요.';
   if (!name || name.trim().length < 1) return '이름을 입력해 주세요.';
   if (name.trim().length > 10) return '이름은 10글자까지예요.';
   if (!/^\d{4}$/.test(code)) return '코드는 숫자 4자리예요.';
