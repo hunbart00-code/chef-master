@@ -99,7 +99,10 @@ export class Business {
           table: tb, cust: null, trash: false, reserved: false, dish: null, flip: ox > 0,
           base: tb.base,
           seat: { x: c.x + ox, y: c.y + (long ? 6 : 8) },
-          serve: { x: c.x + (long ? ox : 2), y: AISLE_Y, face: c.y < AISLE_Y ? 'back' : 'front' }, // 상 앞 통로에서 서빙
+          // 서빙 자리: 맨 앞줄 상은 바 앞 통로(북쪽)에서 바로, 뒷줄 상은 가운데 통로(그 상의 북쪽)에서 → 짧은 동선
+          serve: t.y === 0
+            ? { x: c.x + (long ? ox : 2), y: HALL_TOP + 2, face: 'front' }
+            : { x: c.x + (long ? ox : 2), y: AISLE_Y, face: c.y < AISLE_Y ? 'back' : 'front' },
           trashPos: { x: c.x + (long ? ox / 2 : 1), y: c.y + 2 },
           // 상판 위 음식 자리 (바닥 y): 2인 상은 가운데, 4인 긴 상은 손님마다 위·아래
           dishPos: long ? { x: c.x + (ox < 0 ? -2 : 2), y: c.y + (ox < 0 ? -9 : 2) } : { x: c.x, y: c.y + 1 },
@@ -533,7 +536,7 @@ export class Business {
         break;
       case 'toRowdy':
         if (ch.task.c.state !== 'rowdy') { ch.mode = 'returning'; ch.path = this.route(ch, CHEF_HOME); break; }
-        if (arrived) { ch.mode = 'calming'; ch.calmT = 0; ch.idleDir = 'back'; }
+        if (arrived) { ch.mode = 'calming'; ch.calmT = 0; ch.idleDir = ch.task.c.table.serve.face || 'back'; }
         break;
       case 'calming': {
         const c = ch.task.c;
@@ -545,7 +548,9 @@ export class Business {
           c.handledBy = null;
           ch.walkSpeed = ch.speed;
           ch.speed = c.speed;
-          ch.path = c.path.slice(0, -1).map((p) => ({ x: p.x + 10, y: p.y }));
+          const follow = c.path.slice(0, -1).map((p) => ({ x: p.x + 10, y: p.y }));
+          // 상 북쪽에 서 있었으면 상을 뚫지 말고 상 사이 통로로 돌아서 손님을 따라감
+          ch.path = follow.length ? [...this.walk(ch, follow[0]), ...follow.slice(1)] : [];
           ch.path.push({ x: DOOR.x + 10, y: RH - 20 });
           ch.mode = 'escorting';
         }
