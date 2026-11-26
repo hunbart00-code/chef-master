@@ -1124,6 +1124,7 @@ export class Business {
       this.px.globalAlpha = 0.45 + 0.3 * (Math.floor(this.clock * 4) % 2);
       this.spr(DISH_PX[c.menuId], c.x, hy - 4);
       this.px.globalAlpha = 1;
+      this.pbar(c.x, hy - 19, 16, this.cookProgress(c), '#ff9a3d'); // 조리 진행 게이지
     } else if (c.state === 'eat') {
       for (let i = 0; i < c.grade; i++) this.spr('star', c.x - 9 + i * 9, hy - 2);
       this.pbar(c.x, hy - 1, 16, c.timer / EAT_TIME, '#5aa8ff');
@@ -1135,8 +1136,18 @@ export class Business {
     }
   }
 
+  // 이 손님 음식이 얼마나 됐는지 (0~1)
+  cookProgress(c) {
+    const ch = this.chef;
+    if (c.state === 'cooking') return 0;                       // 문제 푸는 중
+    if (ch.mode === 'cooking' && ch.task?.c === c) return Math.min(1, ch.cook / COOK_TIME);
+    if (ch.tasks.some((t) => t.c === c)) return 0;              // 조리 대기
+    return 1;                                                   // 완성, 가져가는 중
+  }
+
   drawBars() {
     const ch = this.chef;
+    if (ch.mode === 'cooking') { const b = this.burnerPos(); this.pbar(b.x, b.y - 20, 16, ch.cook / COOK_TIME, '#ff9a3d'); }
     if (ch.mode === 'sweeping') this.pbar(ch.x, ch.y - 32, 16, ch.sweepT / CHEF_SWEEP_TIME, '#6bd35f');
     if (ch.mode === 'calming') this.pbar(ch.x, ch.y - 32, 16, ch.calmT / CALM_TIME, '#ffc83d');
     const cl = this.cleaner;
