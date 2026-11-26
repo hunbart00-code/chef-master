@@ -323,3 +323,41 @@ img.pximg { image-rendering: pixelated; vertical-align: middle; }
   .hud-bars .px-bar { min-width: 120px; font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; } }
+
+/* 로그인 */
+.login-form { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.login-row { display: flex; gap: 8px; }
+.login-row .field { flex: 1; }
+.field select { padding: 7px 8px; border: 2px solid #8a5a32; border-radius: 3px; background: #f3e2c0; color: #2a160b; font-size: 16px; }
+#inpCode { letter-spacing: 6px; font-family: var(--font-eng); }
+
+/* 친구·랭킹 */
+.tag { font-size: 10px; background: #3d6fb0; color: #fff; padding: 0 4px; border-radius: 2px; vertical-align: middle; }
+.done { font-size: 12px; color: var(--green); white-space: nowrap; }
+.promo { color: var(--green) !important; }
+.social-head { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; margin-bottom: 8px; }
+.social-head b { color: var(--gold); }
+.panel-body h4 { color: var(--gold); font-size: 14px; margin: 8px 0 4px; }
+.guestbook { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.gb-chip { background: #f3e2c0; color: #2a160b; border: 1px solid #8a5a32; border-radius: 10px; padding: 2px 8px; font-size: 12px; }
+.friend-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px; }
+.friend-card { display: flex; align-items: center; gap: 8px; background: rgba(0, 0, 0, 0.28); border: 1px solid #6b4226; border-radius: 3px; padding: 4px 8px; }
+.fr-info { flex: 1; display: flex; flex-direction: column; }
+.fr-info small { color: var(--cream-dim); font-size: 11px; }
+.rank-tabs { display: flex; gap: 6px; margin-bottom: 4px; }
+.rank-list { display: flex; flex-direction: column; gap: 3px; }
+.rank-row { display: flex; align-items: center; gap: 10px; background: rgba(0, 0, 0, 0.28); border: 1px solid #6b4226; border-radius: 3px; padding: 3px 10px; }
+.rank-row.me { border-color: var(--green); background: rgba(140, 255, 134, 0.12); }
+.rank-row .rk { width: 28px; text-align: center; font-size: 16px; font-weight: 700; color: var(--gold); }
+.rank-row .rn { flex: 1; }
+.rank-row .rv { color: var(--gold); }
+
+/* 방문 바 */
+.visit-who { display: flex; flex-direction: column; font-size: 14px; white-space: nowrap; }
+.visit-who small { font-size: 11px; color: var(--cream-dim); }
+.sticker-row { display: flex; align-items: center; gap: 3px; }
+.sticker-row .px-btn { font-size: 18px; padding: 0 4px; }
+
+/* 미슐랭 리뷰 */
+.review.michelin { background: #2a2010; color: #ffe9a8; border-color: #ffd23f; }
+.review.michelin .rv-stars { color: #ffd23f; }

@@ -148,7 +148,9 @@ export class Business {
     this.time = 0;
     this.spawnTimer = 1.2;
     this.forecast = currentForecast(this.state);
+    this.promo = this.state.promo || 0; // 친구 응원 홍보 버프
     this.log(`${this.forecast.icon} ${this.forecast.name} — 영업을 시작합니다!`);
+    if (this.promo) this.log(`📣 친구 응원 홍보 효과! 오늘 매출 +${Math.round(this.promo * 100)}%`);
     if (this.staffList.length) this.log(`👥 오늘 근무: ${this.staffList.map((a) => a.def.name).join(', ')}`);
     this.pushHud(true);
   }
@@ -304,8 +306,12 @@ export class Business {
     }
     const seat = pick(free);
     const patience = BASE_PATIENCE * (this.forecast.patienceMult || 1);
+    // 미슐랭 심사위원: 겉모습은 일반 손님과 똑같음 (3일차부터, 별점이 높을수록 자주, 하루 1명)
+    const michelin = !rowdy && this.state.day >= 3 && !this.michelinCame
+      && Math.random() < 0.05 + Math.max(0, this.state.rating - 3) * 0.06;
+    if (michelin) this.michelinCame = true;
     const c = this.guestActor(rowdy);
-    Object.assign(c, { table: seat, menuId, rowdy, state: 'enter', patience, maxPatience: patience });
+    Object.assign(c, { table: seat, menuId, rowdy, michelin, state: 'enter', patience, maxPatience: patience });
     c.path = this.entryPath(seat.seat);
     seat.cust = c;
     this.customers.push(c);
@@ -330,6 +336,11 @@ export class Business {
           this.stats.lost++;
           consume(this.state, c.menuId, +1);
           this.float(c.x, c.y - 30, '너무 늦어요!', '#ff8a7a');
+          if (c.michelin) {
+            this.stats.michelin = 'lost'; this.stats.michelinRating = -0.15;
+            this.float(c.x, c.y - 44, '🕵️ 미슐랭 심사위원이었어요…', '#ff8a7a', null, true);
+            this.log('🕵️ 떠난 손님은 <b>미슐랭 심사위원</b>이었어요! 별점 −0.15');
+          }
           this.log(`⏰ ${MENUS[c.menuId].name} 손님이 기다리다 떠났어요.`);
           this.sfx?.play('bad');
           this.leave(c, false);
@@ -643,7 +654,7 @@ export class Business {
 
   pay(c) {
     const base = menuPrice(this.state, c.menuId);
-    const price = Math.round(base * GRADE[c.grade].mult / 10) * 10;
+    const price = Math.round(base * GRADE[c.grade].mult * (1 + (this.promo || 0)) / 10) * 10;
     const tipBonus = 1 + (this.server ? this.server.def.tipBonus : 0);
     const tip = c.grade === 3 ? Math.round(base * TIP_RATE * (this.forecast.tipMult || 1) * tipBonus / 10) * 10 : 0;
     this.state.money += price + tip;
@@ -652,9 +663,28 @@ export class Business {
     this.float(c.x, c.y - 36, `+${won(price)}`, c.grade === 1 ? '#ff8a7a' : '#ffd23f', 'coin', true);
     if (tip) this.float(c.x, c.y - 26, `팁 +${won(tip)}`, '#ff9ac8', 'heart', false, 0.25);
     if (c.grade >= 2) for (let i = 0; i < (c.grade === 3 ? 3 : 1); i++) this.particles.push({ kind: 'icon', sprite: c.grade === 3 && i ? 'star' : 'heart', x: c.x + rand(-8, 8), y: c.y - 22, vx: rand(-3, 3), vy: -rand(14, 22), life: -i * 0.15, max: 1.3 });
+    if (c.michelin) this.revealMichelin(c, tip);
     this.sfx?.play(c.grade === 1 ? 'bad' : 'coin');
     c.table.dish = null;
     this.leave(c, Math.random() < 0.8 * (this.cleaner ? this.cleaner.def.trashMult : 1));
+  }
+
+  // 결제 순간 정체 공개
+  revealMichelin(c, tip) {
+    const g = c.grade;
+    let bonus = 0;
+    if (g === 3) { bonus = 20000 + tip * 2; this.stats.michelin = 'pass'; this.stats.michelinRating = 0.15; }
+    else if (g === 2) { bonus = 5000; this.stats.michelin = 'ok'; }
+    else { this.stats.michelin = 'fail'; this.stats.michelinRating = -0.15; }
+    this.stats.bonus += bonus;
+    this.state.money += bonus;
+    this.float(c.x, c.y - 50, '🕵️ 사실 미슐랭 심사위원!', g === 3 ? '#8cff86' : g === 2 ? '#ffd23f' : '#ff8a7a', null, true, 0.4);
+    if (bonus) this.float(c.x, c.y - 60, `보너스 +${won(bonus)}`, '#8cff86', 'coin', true, 0.9);
+    if (g === 3) { this.sparkle(c.x, c.y - 20, 14); this.sfx?.play('perfect'); }
+    this.log(g === 3 ? `🕵️ <b>미슐랭 심사위원</b>이었어요! 특상급 요리에 감동 → 보너스 ${won(bonus)}, 별점 +0.15`
+      : g === 2 ? `🕵️ <b>미슐랭 심사위원</b>이었어요. 무난한 평가 → 보너스 ${won(bonus)}`
+        : '🕵️ <b>미슐랭 심사위원</b>에게 탄 요리를… 별점 −0.15');
+    this.hooks.toast?.(g === 3 ? '🕵️ 미슐랭 심사위원 통과! ✨' : g === 2 ? '🕵️ 미슐랭 심사위원이 다녀갔어요' : '🕵️ 미슐랭 심사위원 불합격…');
   }
 
   leave(c, leaveTrash) {

@@ -11,9 +11,9 @@ const shuffle = (arr) => {
   return a;
 };
 
-function loadMem() {
+function loadMem(key = MEM_KEY) {
   try {
-    const m = JSON.parse(localStorage.getItem(MEM_KEY));
+    const m = JSON.parse(localStorage.getItem(key));
     if (m && Array.isArray(m.recent)) return { mathWrong: [], stats: {}, ...m };
   } catch (e) { /* ignore */ }
   return { recent: [], wrongQueue: [], mathWrong: [], stats: {} };
@@ -21,11 +21,18 @@ function loadMem() {
 
 export class QuizEngine {
   constructor() {
+    this.key = MEM_KEY;
     this.mem = loadMem();
   }
 
+  // 계정마다 오답 기록·통계를 따로
+  useScope(id) {
+    this.key = id ? `${MEM_KEY}:${id}` : MEM_KEY;
+    this.mem = loadMem(this.key);
+  }
+
   save() {
-    try { localStorage.setItem(MEM_KEY, JSON.stringify(this.mem)); } catch (e) { /* ignore */ }
+    try { localStorage.setItem(this.key, JSON.stringify(this.mem)); } catch (e) { /* ignore */ }
   }
 
   reset() {

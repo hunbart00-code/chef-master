@@ -29,6 +29,7 @@
       <div class="px-chip" id="forecastChip"></div>
       <button class="px-icon" id="btnSound" title="소리">🔊</button>
       <button class="px-icon" id="btnHelp" title="도움말">?</button>
+      <button class="px-icon" id="btnLogout" title="로그아웃">🚪</button>
     </div>
 
     <!-- 영업 일지 (잠깐 떴다 사라짐) -->
@@ -41,6 +42,8 @@
         <button class="px-btn" data-open="staff">👥 고용</button>
         <button class="px-btn" data-open="layout">🪑 배치</button>
         <button class="px-btn" data-open="kitchen">🧊 주방</button>
+        <button class="px-btn" data-open="friends">🏘️ 친구</button>
+        <button class="px-btn" data-open="rank">🏆 랭킹</button>
         <button class="px-btn warn" id="btnRescue" hidden>🧽 설거지 알바</button>
         <button class="px-btn go" id="btnOpen">영업 시작 ▶</button>
       </div>
@@ -51,6 +54,11 @@
         <span class="bb-stat">★3 <b id="bizPerfect">0</b></span>
         <span class="bb-stock" id="bizStock"></span>
         <button class="px-btn small" id="btnCloseEarly">마감</button>
+      </div>
+      <div class="bb-row" id="bbVisit" hidden>
+        <span class="visit-who" id="visitWho"></span>
+        <span class="sticker-row" id="stickerRow"></span>
+        <button class="px-btn small go" id="btnHome">🏠 내 가게로</button>
       </div>
       <div class="bb-row" id="bbEdit" hidden>
         <span class="bb-hint">가구를 고르고 가게 바닥의 빈 칸을 누르세요. 놓인 가구를 누르면 창고로!</span>
@@ -65,25 +73,29 @@
       <div class="panel-body" id="panelBody"></div>
     </div>
 
-    <!-- 타이틀 -->
+    <!-- 로그인 -->
     <div id="titleCard" class="px-panel center-card">
       <h1>셰프 마스터</h1>
       <p class="subtitle">수학·영어로 요리하는 식당 타이쿤</p>
-      <div id="titleContinue" hidden>
-        <button class="px-btn go big" id="btnContinue">이어하기</button>
-        <p class="small muted" id="continueInfo"></p>
+      <div id="loginForm" class="login-form">
+        <div class="login-row">
+          <label class="field">반 <select id="selBan"></select></label>
+          <label class="field">번호 <select id="selNo"></select></label>
+        </div>
+        <label class="field">이름 <input id="inpName" maxlength="10" placeholder="이름" autocomplete="off"></label>
+        <label class="field">4자리 코드 <input id="inpCode" type="password" inputmode="numeric" maxlength="4" placeholder="숫자 4자리" autocomplete="off"></label>
+        <p class="small muted">처음이면 이 코드로 내 가게가 만들어져요. 코드를 꼭 기억하세요!</p>
+        <button class="px-btn go big" id="btnLogin">입장하기</button>
       </div>
-      <div id="titleNew">
-        <label class="field">사장님 이름 <input id="inpName" maxlength="10" placeholder="이름을 입력하세요" autocomplete="off"></label>
-        <div class="field">내 셰프 캐릭터
-          <div class="chef-pick">
-            <button class="chef-opt selected" data-look="chef_m" type="button"></button>
-            <button class="chef-opt" data-look="chef_f" type="button"></button>
-          </div>
+      <div id="newShopStep" hidden>
+        <p><b id="newShopWho"></b> 처음 왔네요! 내 셰프 캐릭터를 골라요.</p>
+        <div class="chef-pick">
+          <button class="chef-opt selected" data-look="chef_m" type="button"></button>
+          <button class="chef-opt" data-look="chef_f" type="button"></button>
         </div>
         <button class="px-btn go big" id="btnNew">가게 열기</button>
+        <button class="px-btn small" id="btnBack">뒤로</button>
       </div>
-      <button class="px-btn small" id="btnShowNew" hidden>처음부터 새로 시작</button>
       <details class="local-settings">
         <summary>⚙️ 로컬 모드 설정</summary>
         <label>과목 비중

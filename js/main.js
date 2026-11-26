@@ -6,8 +6,10 @@ import {
   fridgeUsed, fridgeFree, buyIngredient, autoShop, upgradeFridge, buyItem, placeItem, pickupItem,
   branchMenus, cookableCount, anyCookable, menuPrice, isBankrupt, settleDay, decoBonus, tablesOf,
   INGREDIENTS, MENUS, ITEMS, FRIDGE_LEVELS, RESCUE_BASE, RESCUE_PER_CORRECT, won,
-  hireStaff, fireStaff, staffOf, totalWages, sellIngredient, clearFridge, missingHint,
+  hireStaff, fireStaff, staffOf, totalWages, sellIngredient, clearFridge, missingHint, setSaveScope,
 } from './shop-engine.js';
+import { tryLogin, createAccount, lastLogin } from './account.js';
+import { STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js';
 import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js';
 import { QuizEngine } from './quiz-engine.js';
 import { QuizUI } from './quiz-ui.js';
@@ -26,6 +28,9 @@ let settings = loadSettings();
 let panelKind = null;
 let layoutSelected = null;
 let chefLook = 'chef_m';
+let pendingLogin = null;
+let visiting = null;
+let rankKind = 'rich';
 const classControl = { isPaused: false, subjectRatio: null, maxBranchUnlocked: 4 };
 const engine = new QuizEngine();
 const quiz = new QuizUI($('#quizModal'), engine, () => ({
@@ -81,7 +86,8 @@ function updateHud(clock) {
   $('#hudRating').textContent = state.rating.toFixed(1);
   $('#hudPerfect').textContent = state.perfectCookCount;
   const f = currentForecast(state);
-  $('#forecastChip').innerHTML = `<span class="fc-ico">${f.icon}</span><span><b>${f.name}</b><small>${f.desc}</small></span>`;
+  const promo = state.promo ? `<small class="promo">📣 친구 응원 홍보 효과 · 오늘 매출 +${Math.round(state.promo * 100)}%</small>` : '';
+  $('#forecastChip').innerHTML = `<span class="fc-ico">${f.icon}</span><span><b>${f.name}</b><small>${f.desc}</small>${promo}</span>`;
 }
 
 function persist() { saveShop(state); }
@@ -117,16 +123,14 @@ function makeScene(st) {
 
 // ---------- 타이틀 ----------
 function initTitle() {
-  const saved = loadShop();
   $('#selRatio').value = settings.subjectRatio;
-  if (saved) {
-    $('#titleContinue').hidden = false;
-    $('#titleNew').hidden = true;
-    $('#btnShowNew').hidden = false;
-    $('#continueInfo').textContent = `${saved.name} 사장님 · DAY ${saved.day} · ${won(saved.money)}`;
-  }
-  // 타이틀 뒤에도 가게가 보이도록 미리보기
-  const preview = saved || newShop('');
+  $('#selBan').innerHTML = Array.from({ length: 15 }, (_, i) => `<option value="${i + 1}">${i + 1}반</option>`).join('');
+  $('#selNo').innerHTML = Array.from({ length: 35 }, (_, i) => `<option value="${i + 1}">${i + 1}번</option>`).join('');
+  const last = lastLogin();
+  if (last) { $('#selBan').value = last.ban; $('#selNo').value = last.no; $('#inpName').value = last.name; }
+
+  // 로그인 화면 뒤에도 가게가 보이도록 미리보기
+  const preview = newShop('');
   ensureForecast(preview);
   makeScene(preview);
 
@@ -134,26 +138,40 @@ function initTitle() {
     b.innerHTML = `${pxImg(`${b.dataset.look}_front`, 3)}<span>${b.dataset.look === 'chef_m' ? '남자 셰프' : '여자 셰프'}</span>`;
     b.onclick = () => { chefLook = b.dataset.look; $$('.chef-opt').forEach((x) => x.classList.toggle('selected', x === b)); };
   });
-  $('#btnContinue').onclick = () => startGame(loadShop());
-  $('#btnShowNew').onclick = async () => {
-    if (!(await confirmBox('지금까지의 가게 기록이 <b>모두 사라져요</b>.<br>정말 새로 시작할까요?'))) return;
-    $('#titleContinue').hidden = true;
-    $('#titleNew').hidden = false;
-    $('#btnShowNew').hidden = true;
+  const form = () => ({ ban: $('#selBan').value, no: $('#selNo').value, name: $('#inpName').value.trim(), code: $('#inpCode').value.trim() });
+  $('#btnLogin').onclick = () => {
+    const f = form();
+    const r = tryLogin(f);
+    if (!r.ok) { toast(r.reason); sfx.play('wrong'); return; }
+    if (r.isNew) {
+      pendingLogin = { ...f, id: r.id };
+      $('#newShopWho').textContent = `${f.ban}반 ${f.no}번 ${f.name},`;
+      $('#loginForm').hidden = true;
+      $('#newShopStep').hidden = false;
+      return;
+    }
+    enterAccount(r.id, f);
   };
+  $('#btnBack').onclick = () => { pendingLogin = null; $('#loginForm').hidden = false; $('#newShopStep').hidden = true; };
   $('#btnNew').onclick = () => {
-    const name = $('#inpName').value.trim();
-    if (!name) { toast('사장님 이름을 입력해 주세요!'); $('#inpName').focus(); return; }
-    clearShop();
-    engine.reset();
-    const s = newShop(name);
-    s.chefLook = chefLook;
-    saveShop(s);
-    startGame(s);
+    if (!pendingLogin) return;
+    const id = createAccount(pendingLogin);
+    enterAccount(id, pendingLogin, true);
     $('#helpModal').hidden = false;
   };
-  $('#inpName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnNew').click(); });
+  for (const id of ['#inpName', '#inpCode']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnLogin').click(); });
   $('#selRatio').onchange = (e) => { settings.subjectRatio = e.target.value; saveSettings(settings); };
+}
+
+function enterAccount(id, f, isNew = false) {
+  setSaveScope(id);
+  engine.useScope(id);
+  let s = loadShop();
+  if (!s) { s = newShop(f.name); s.chefLook = chefLook; }
+  Object.assign(s, { accountId: id, ban: Number(f.ban), no: Number(f.no), name: f.name });
+  saveShop(s);
+  startGame(s);
+  if (!isNew) toast(`${f.name} 사장님, 어서 오세요! 🍜`);
 }
 
 function startGame(s) {
@@ -167,7 +185,11 @@ function startGame(s) {
 
 // ---------- 준비 ----------
 function enterPrep() {
+  visiting = null;
   ensureForecast(state);
+  const fresh = pullIncomingCheers(state);
+  for (const e of fresh) { const st = stickerById(e.sticker); feed(`💌 ${e.from}: ${st.icon} ${st.text}`); }
+  if (fresh.length) toast(`친구 응원 ${fresh.length}개 도착! 오늘 매출 +${Math.round(state.promo * 100)}% 📣`);
   saveShop(state);
   $('#settleCard').hidden = true;
   makeScene(state);
@@ -180,6 +202,7 @@ function showBar(which) {
   $('#bbPrep').hidden = which !== 'prep';
   $('#bbBiz').hidden = which !== 'biz';
   $('#bbEdit').hidden = which !== 'edit';
+  $('#bbVisit').hidden = which !== 'visit';
 }
 
 function refreshPrep() {
@@ -189,7 +212,7 @@ function refreshPrep() {
 }
 
 // ---------- 팝업 패널 ----------
-const PANEL_TITLES = { ing: '🛒 식재료 구매', staff: '👥 종업원 고용', kitchen: '🧊 주방 설비' };
+const PANEL_TITLES = { ing: '🛒 식재료 구매', staff: '👥 종업원 고용', kitchen: '🧊 주방 설비', friends: '🏘️ 친구 가게', rank: '🏆 학급 랭킹' };
 
 function openPanel(kind) {
   if (kind === 'layout') { closePanel(); startEdit(); return; }
@@ -214,7 +237,71 @@ function renderPanel() {
   if (panelKind === 'ing') body.innerHTML = ingredientsHtml();
   if (panelKind === 'staff') body.innerHTML = staffHtml();
   if (panelKind === 'kitchen') body.innerHTML = kitchenHtml();
+  if (panelKind === 'friends') body.innerHTML = friendsHtml();
+  if (panelKind === 'rank') body.innerHTML = rankHtml();
 }
+
+// ---------- 친구 가게 ----------
+function friendsHtml() {
+  const left = cheersLeftToday(state);
+  const mine = guestbookOf(state.accountId);
+  const book = mine.length ? mine.map((e) => { const st = stickerById(e.sticker); return `<span class="gb-chip">${st.icon} <b>${e.from}</b> ${st.text}</span>`; }).join('')
+    : '<span class="muted small">아직 받은 응원이 없어요. 친구 가게에 먼저 놀러 가 봐요!</span>';
+  const friends = listClassmates(state).map((f) => `
+    <div class="friend-card">
+      ${pxImg(`${f.chefLook || 'chef_m'}_front`, 2)}
+      <div class="fr-info"><b>${f.name}</b>${f.demo ? ' <span class="tag">체험</span>' : ''}<small>DAY ${f.day} · ★ ${(f.rating || 0).toFixed(1)} · 완벽 ${f.perfectCookCount || 0}</small></div>
+      ${cheeredToday(state, f.id) ? '<span class="done">💌 응원함</span>' : ''}
+      <button class="px-btn tiny go" data-visit="${f.id}">놀러가기</button>
+    </div>`).join('');
+  return `
+    <div class="social-head">
+      <span>오늘 남은 응원 <b>${left}/${CHEERS_PER_DAY}</b></span>
+      <span>내 홍보 효과 <b>${state.promo ? `+${Math.round(state.promo * 100)}%` : '없음'}</b> <small class="muted">(응원 1개당 다음 영업 매출 +10%, 최대 +30%)</small></span>
+    </div>
+    <h4>💌 내 방명록</h4><div class="guestbook">${book}</div>
+    <h4>🏘️ ${state.ban}반 친구들</h4>
+    ${isDemo() ? '<p class="small muted">학급 서버 연결 전이라 이 기기의 같은 반 계정 + 체험용 친구가 보여요.</p>' : ''}
+    <div class="friend-list">${friends}</div>`;
+}
+
+function rankHtml() {
+  const tabs = Object.entries(RANKINGS).map(([k, r]) => `<button class="px-btn small ${rankKind === k ? 'active go' : ''}" data-rank="${k}">${r.icon} ${r.name}</button>`).join('');
+  const rows = ranking(state, rankKind).map((r) => `
+    <div class="rank-row ${r.isMe ? 'me' : ''}">
+      <span class="rk">${r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : r.rank}</span>
+      ${pxImg(`${r.chefLook || 'chef_m'}_front`, 1)}
+      <span class="rn">${r.name}${r.isMe ? ' (나)' : ''}${r.demo ? ' <span class="tag">체험</span>' : ''}</span>
+      <b class="rv">${r.label}</b>
+    </div>`).join('');
+  return `<div class="rank-tabs">${tabs}</div><p class="small muted">${RANKINGS[rankKind].desc}</p><div class="rank-list">${rows}</div>`;
+}
+
+function visitFriend(id) {
+  const f = listClassmates(state).find((x) => x.id === id);
+  if (!f) return;
+  closePanel();
+  visiting = f;
+  makeScene({ ...f, forecast: { id: 'sunny', day: f.day }, fridge: f.fridge || { level: 0, capacity: 20, items: {} }, inventory: f.inventory || {}, today: { expense: 0 } });
+  scene.mode = 'visit';
+  showBar('visit');
+  updateHud('방문');
+  renderVisitBar();
+  sfx.play('bell');
+}
+
+function renderVisitBar() {
+  const f = visiting;
+  const done = cheeredToday(state, f.id);
+  const left = cheersLeftToday(state);
+  const book = guestbookOf(f.id).slice(0, 3).map((e) => stickerById(e.sticker).icon).join(' ');
+  $('#visitWho').innerHTML = `<span>🏠 <b>${f.name}</b>네 가게</span><small>★ ${(f.rating || 0).toFixed(1)} · DAY ${f.day}${book ? ` · 방명록 ${book}` : ''}</small>`;
+  $('#stickerRow').innerHTML = done
+    ? '<span class="done">💌 오늘 응원 완료!</span>'
+    : left <= 0 ? '<span class="muted small">오늘 응원 3번을 다 썼어요</span>'
+      : `<span class="small muted">시식 & 응원:</span>${STICKERS.map((st) => `<button class="px-btn tiny" data-sticker="${st.id}" title="${st.text}">${st.icon}</button>`).join('')}`;
+}
+
 
 function ingredientsHtml() {
   const used = fridgeUsed(state), cap = state.fridge.capacity;
@@ -303,6 +390,10 @@ function bindPanel() {
       persist(); refreshPrep();
       return;
     }
+    const v = e.target.closest('[data-visit]');
+    if (v) { visitFriend(v.dataset.visit); return; }
+    const rk = e.target.closest('[data-rank]');
+    if (rk) { rankKind = rk.dataset.rank; renderPanel(); sfx.play('tap'); return; }
     const sell = e.target.closest('[data-sell]');
     if (sell) {
       if (!sellIngredient(state, sell.dataset.sell, 1)) return;
@@ -488,6 +579,7 @@ function showSettlement(stats) {
     <table class="ledger">
       <tr><td>총 매출</td><td class="plus">+${won(r.revenue)}</td></tr>
       <tr><td>팁</td><td class="plus">+${won(r.tips)}</td></tr>
+      ${r.bonus ? `<tr><td>🕵️ 미슐랭 보너스</td><td class="plus">+${won(r.bonus)}</td></tr>` : ''}
       <tr><td>재료·가구·계약금</td><td class="minus">−${won(r.expense)}</td></tr>
       <tr><td>종업원 일급</td><td class="minus">−${won(r.wages)}</td></tr>
       <tr class="total"><td>순수익</td><td class="${r.net >= 0 ? 'plus' : 'minus'}">${r.net >= 0 ? '+' : '−'}${won(Math.abs(r.net))}</td></tr>
@@ -505,7 +597,7 @@ function showSettlement(stats) {
     ${r.quit.length ? `<div class="quit-notice">💸 일급이 모자라서 <b>${r.quit.join(', ')}</b>이(가) 그만뒀어요.</div>` : ''}
     <div class="rating-change">별점 <b>${r.oldRating.toFixed(2)}</b> → <b class="${diff >= 0 ? 'up' : 'down'}">${r.newRating.toFixed(2)} ${diff >= 0 ? '▲' : '▼'}</b> · 보유 <b>${won(state.money)}</b></div>`;
   $('#reviewList').innerHTML = r.reviews.map((rv) => `
-    <div class="review"><div class="rv-head"><b>${rv.who}</b><span class="rv-stars">${'★'.repeat(rv.stars)}${'☆'.repeat(5 - rv.stars)}</span></div><p>${rv.text}</p></div>`).join('');
+    <div class="review ${rv.michelin ? 'michelin' : ''}"><div class="rv-head"><b>${rv.who}</b><span class="rv-stars">${'★'.repeat(rv.stars)}${'☆'.repeat(5 - rv.stars)}</span></div><p>${rv.text}</p></div>`).join('');
   $('#settleCard').hidden = false;
   showBar('none');
 }
@@ -523,6 +615,25 @@ async function init() {
   $('#btnRescue').onclick = doRescue;
   $('#btnCloseEarly').onclick = closeEarly;
   $('#btnNextDay').onclick = enterPrep;
+  $('#btnHome').onclick = enterPrep;
+  $('#stickerRow').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sticker]');
+    if (!b || !visiting) return;
+    const r = sendCheer(state, visiting, b.dataset.sticker);
+    if (!r.ok) { toast(r.reason); return; }
+    const st = stickerById(b.dataset.sticker);
+    scene.float(scene.chef.x, scene.chef.y - 34, `${st.icon} ${st.text}`, '#ffd23f', null, true);
+    scene.sparkle(scene.chef.x, scene.chef.y - 20, 8);
+    sfx.play('perfect');
+    toast(`${visiting.name}네 가게에 응원 스티커! 친구의 다음 영업 매출 +10% 📣`);
+    renderVisitBar();
+  });
+  $('#btnLogout').onclick = async () => {
+    if (scene?.mode === 'business') { toast('영업 중에는 나갈 수 없어요.'); return; }
+    if (!(await confirmBox('로그아웃할까요?<br><small>가게는 자동 저장돼요.</small>'))) return;
+    if (state) saveShop(state);
+    location.reload();
+  };
   $('#btnHelp').onclick = () => { if (scene && !quiz.isOpen) scene.paused = true; $('#helpModal').hidden = false; };
   $('#helpModal [data-close]').onclick = () => {
     $('#helpModal').hidden = true;

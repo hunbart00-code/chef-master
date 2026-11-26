@@ -46,9 +46,23 @@ export function newShop(name = '') {
   };
 }
 
-export function loadShop() {
+// 계정별 저장 칸 (반-번호). 로그인 전 기존 저장은 SAVE_KEY 그대로
+let scope = '';
+const keyOf = (id) => (id ? `${SAVE_KEY}:${id}` : SAVE_KEY);
+export function setSaveScope(id) {
+  scope = id || '';
+  // 로그인 기능 이전에 만든 가게는 처음 로그인한 계정으로 옮김
+  if (scope && !localStorage.getItem(keyOf(scope)) && localStorage.getItem(SAVE_KEY)) {
+    localStorage.setItem(keyOf(scope), localStorage.getItem(SAVE_KEY));
+    localStorage.removeItem(SAVE_KEY);
+  }
+}
+/** 다른 계정(같은 기기 친구) 가게 읽기 */
+export function loadShopOf(id) { return loadShop(id); }
+
+export function loadShop(id = scope) {
   try {
-    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+    const s = JSON.parse(localStorage.getItem(keyOf(id)));
     if (s && s.version === 1) {
       // 구버전 가구 이름 이전 (lamp → trophy)
       for (const it of s.layout || []) if (it.type === 'lamp') it.type = 'trophy';
@@ -64,10 +78,10 @@ export function loadShop() {
 
 export function saveShop(state) {
   state.lastSavedAt = new Date().toISOString();
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); return true; } catch (e) { return false; }
+  try { localStorage.setItem(keyOf(scope), JSON.stringify(state)); return true; } catch (e) { return false; }
 }
 
-export function clearShop() { localStorage.removeItem(SAVE_KEY); }
+export function clearShop() { localStorage.removeItem(keyOf(scope)); }
 
 export function loadSettings() {
   try { return { subjectRatio: '50:50', sound: true, ...JSON.parse(localStorage.getItem(SETTINGS_KEY)) }; } catch (e) { return { subjectRatio: '50:50', sound: true }; }
@@ -297,6 +311,7 @@ export function newDayStats() {
   return {
     revenue: 0, tips: 0, served: 0, grades: { 1: 0, 2: 0, 3: 0 }, lost: 0, noStock: 0,
     rowdyHandled: 0, rowdyIgnored: 0, trashSeconds: 0, trashCleaned: 0, quizCorrect: 0, quizTotal: 0,
+    bonus: 0, michelin: null, michelinRating: 0, // 미슐랭 심사위원 결과: 'pass' | 'ok' | 'fail' | 'lost'
   };
 }
 
@@ -312,7 +327,7 @@ export function settleDay(state, stats) {
   }
   state.money -= wages;
   const expense = state.today.expense;
-  const net = stats.revenue + stats.tips - expense - wages;
+  const net = stats.revenue + stats.tips + (stats.bonus || 0) - expense - wages;
 
   // 별점 계산
   const events = [];
@@ -326,18 +341,21 @@ export function settleDay(state, stats) {
   dayScore += decoBonus(state);
   dayScore = Math.max(1, Math.min(5, dayScore));
   state.rating = Math.round((oldRating + (dayScore - oldRating) * 0.3) * 100) / 100;
+  // 미슐랭 심사위원 평가는 하루 평균과 별도로 바로 반영
+  if (stats.michelinRating) state.rating = Math.round(Math.max(1, Math.min(5, state.rating + stats.michelinRating)) * 100) / 100;
 
   state.perfectCookCount += stats.grades[3];
   state.totalServed += stats.served;
 
   const result = {
-    day: state.day, revenue: stats.revenue, tips: stats.tips, expense, wages, net,
+    day: state.day, revenue: stats.revenue, tips: stats.tips, bonus: stats.bonus || 0, michelin: stats.michelin, expense, wages, net,
     oldRating, newRating: state.rating, dayScore, reviews: makeReviews(state, stats), quit,
   };
   state.history.push({ day: state.day, net, rating: state.rating, served: stats.served, perfect: stats.grades[3] });
   if (state.history.length > 60) state.history.shift();
   state.day++;
   state.today = { expense: 0 };
+  state.promo = 0; // 친구 응원 홍보 버프는 하루 영업에 쓰고 사라짐
   return result;
 }
 
@@ -368,6 +386,12 @@ function makeReviews(state, s) {
   else if (s.served > 3) pool.push({ stars: 5, text: `가게가 깔끔해서 기분 좋게 먹었어요 ✨` });
   if (s.rowdyHandled > 0) pool.push({ stars: 5, text: `시끄러운 손님을 ${state.staff.some((x) => x.role === 'guard') ? '경호원이' : '사장님이'} 바로 해결해 주셨어요 👍` });
   if (s.rowdyIgnored > 0) pool.push({ stars: 1, text: `옆 테이블 진상 손님 때문에 밥맛이 없었어요 😡` });
+  const MICHELIN = {
+    pass: { stars: 5, text: '🕵️ [미슐랭 심사위원] 완벽한 한 접시. 이 가게에 별을 드립니다. ✨' },
+    ok: { stars: 3, text: '🕵️ [미슐랭 심사위원] 나쁘지 않지만, 아직 별을 주기엔 아쉽군요.' },
+    fail: { stars: 1, text: '🕵️ [미슐랭 심사위원] 탄 요리를 내놓다니… 실망입니다.' },
+    lost: { stars: 1, text: '🕵️ [미슐랭 심사위원] 주문도 받지 않다니, 다시 오지 않겠습니다.' },
+  };
   if (state.forecast?.id === 'tourists' && s.served > 0) pool.push({ stars: 5, text: `So delicious! I will come back again! 🌏`, eng: true });
   if (state.forecast?.id === 'rain' && s.served > 0) pool.push({ stars: 5, text: `비 오는 날엔 역시 따끈한 국물이죠 ☔` });
   if (!pool.length) pool.push({ stars: 3, text: `손님이 별로 없어서 조용했어요.` });
@@ -381,7 +405,8 @@ function makeReviews(state, s) {
     used.add(r.text);
     out.push({ ...r, who: r.eng ? 'Tourist Emma' : pick(NAMES) });
   }
-  return out.sort((a, b) => b.stars - a.stars);
+  if (s.michelin && MICHELIN[s.michelin]) out.unshift({ ...MICHELIN[s.michelin], who: '미슐랭 심사위원', michelin: true });
+  return out.sort((a, b) => (b.michelin ? 9 : b.stars) - (a.michelin ? 9 : a.stars)).slice(0, 4);
 }
 
 export const won = (n) => `${Math.round(n).toLocaleString('ko-KR')}원`;
