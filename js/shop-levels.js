@@ -25,7 +25,7 @@ export function geometry(level) {
     KITCHEN_Y: 84,
     KITCHEN: { x0: 41, x1: barX1, y0: 48, y1: 100 },
     BAR: { x0: 28, x1: barX1, top: 99, base: 121, vx1: 38, vy0: 48 },
-    KDOOR_X: barX1 + 8,
+    KDOOR_X: barX1 + 44,               // 주방 출입구: 포스기 바로 오른쪽
     HALL: { x0: 24, x1: w - 24, y0: 140, y1: hallY1 },
     DOOR: { x: 64, y: h - 4 },
     AISLE_Y: L.rows === 1 ? hallY1 + 2 : 186,
@@ -42,12 +42,12 @@ export function geometry(level) {
     WALL: small ? [{ name: 'clock', x: 160, y: 30 }, { name: 'poster', x: 228, y: 40 }]
       : level === 1 ? [{ name: 'window', x: 212, y: 40 }, { name: 'menu_frame', x: 302, y: 40 }]
         : [{ name: 'window', x: 262, y: 40 }, { name: 'menu_frame', x: 302, y: 40 }, { name: 'clock', x: 380, y: 32 }, { name: 'poster', x: 410, y: 40 }],
-    POS_X: barX1 + 30,
+    POS_X: barX1 + 18,                 // 포스기: 바 끝에 딱 붙임
     CHALK_X: Math.round((41 + barX1) / 2) + (small ? 0 : 20),
     HOMES: {
-      server: { x: barX1 + 38, y: 134 },
-      cleaner: { x: w - 76, y: 128 },
-      guard: { x: 92, y: hallY1 - 4 },
+      server: { x: barX1 + 62, y: 126 },   // 포스기 옆 (출입구 건너편)
+      cleaner: { x: 34, y: 139 },          // 홀 왼쪽 위 구석
+      guard: { x: 86, y: h - 20 },         // 입구 옆
     },
     GRID: { cols: L.cols, rows: L.rows },
   };

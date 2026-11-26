@@ -876,7 +876,7 @@ export class Business {
     for (const x of STOOLS) add(134, () => this.spr('stool2', x, 134));
     for (const e of APPL.extra || []) add(KITCHEN_Y, () => this.spr(e.name, e.x, KITCHEN_Y));
     for (const w of WALL) this.spr(w.name, w.x, w.y);
-    add(112, () => this.spr('pos', POS_X, 112));
+    add(BAR.base, () => this.spr('pos', POS_X, BAR.base));
     for (const tb of this.tables) add(tb.base, () => this.spr(ITEM_PX[tb.type], tb.cx, tb.base));
     for (const s of this.seats) {
       if (s.dish) add(s.base + 0.5, () => this.spr(s.dish.sprite, s.dishPos.x, s.dishPos.y));
