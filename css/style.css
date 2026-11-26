@@ -385,7 +385,7 @@ img.pximg { image-rendering: pixelated; vertical-align: middle; }
 .sw.on { outline: 2px solid var(--gold); outline-offset: 1px; }
 .row-end { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .staff-summary .px-btn { margin-right: 6px; }
-@media (max-width: 640px) { .chef-custom { flex-direction: column; align-items: center; } }
+@media (max-width: 640px) and (orientation: portrait) { .chef-custom { flex-direction: column; align-items: center; } }
 
 /* ---------- 스마트폰 ---------- */
 html, body { touch-action: manipulation; overscroll-behavior: none; }
@@ -458,3 +458,19 @@ html.short .sw { width: 18px; height: 18px; }
 html.short .cc-preview { padding: 6px; }
 html.short .cc-preview img { height: 70px; }
 html.short #newShopStep p { margin: 2px 0; }
+
+/* 휴대폰 가로: 로그인 칸을 2줄로 접어 입장 버튼이 항상 보이게 */
+html.short #titleCard { width: min(520px, calc(100vw - 16px)); }
+html.short #titleCard .subtitle, html.short .local-settings { display: none; }
+html.short #titleCard h1 { font-size: 22px; }
+html.short .login-form { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+html.short .login-form > .login-row, html.short .login-form > p, html.short .login-form > .px-btn { grid-column: 1 / -1; }
+html.short .login-form > p { margin: 0; font-size: 11px; }
+html.short .field { gap: 2px; font-size: 11px; }
+html.short .px-btn.big { min-height: 34px; font-size: 16px; }
+html.short .chef-custom { gap: 8px; }
+html.short .cc-row { gap: 4px; }
+html.short .cc-lb { width: 52px; font-size: 11px; }
+/* 휴대폰 가로: 퀴즈 보기·결산은 항상 2칸 (4번 보기가 잘리지 않게) */
+html.short .quiz-choices { grid-template-columns: 1fr 1fr; gap: 4px; }
+html.short .settle { grid-template-columns: 1fr 1fr; }
