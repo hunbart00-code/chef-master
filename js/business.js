@@ -1022,10 +1022,14 @@ export class Business {
   carry(a) {
     const name = a.carry.grade === 1 ? 'dish_burnt' : DISH_PX[a.carry.c.menuId];
     const bob = a.moving ? -(Math.floor(a.t * 8) % 2) : 0;
-    // 머리 위가 아니라 손(쟁반) 높이, 몸 앞쪽에 들고 감
-    const side = a.dir === 'left' ? -4 : a.dir === 'right' ? 4 : 0;
-    if (a.dir === 'back') return; // 뒤돌아 걸을 땐 몸에 가려 안 보임
-    this.spr(name, a.x + side, a.y - 9 + bob);
+    // 몸을 가리지 않게 작게(60%) 줄여서 옆 손 높이에 들고 감
+    const sp = px(name);
+    if (!sp) return;
+    const dir = a.moving ? a.dir : (a.idleDir || 'front');
+    const side = dir === 'left' ? -7 : 7;
+    const w = Math.round(sp.width * 0.6), h = Math.round(sp.height * 0.6);
+    const X = Math.round(a.x + side - w / 2 + this.ox), Y = Math.round(a.y - 8 + bob - h + this.oy);
+    this.px.drawImage(sp, X, Y, w, h);
   }
 
   broom(a) {
