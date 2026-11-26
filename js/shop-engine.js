@@ -1,6 +1,7 @@
 // 가게 상태·경제·저장 엔진 (localStorage 단독 모드, 3차에서 Firestore 연동)
 import { INGREDIENTS, MENUS, BRANCHES, FORECASTS, menuCost } from './data-menus.js';
-import { ITEMS, FRIDGE_LEVELS, DECO_BONUS_CAP, LAYOUT_GRID } from './data-interior.js';
+import { ITEMS, FRIDGE_LEVELS, DECO_BONUS_CAP } from './data-interior.js';
+import { SHOP_LEVELS, gridOf } from './shop-levels.js';
 import { staffTier } from './data-staff.js';
 
 export const SAVE_KEY = 'chefmaster_shop_v1';
@@ -28,10 +29,9 @@ export function newShop(name = '') {
     perfectCookCount: 0,
     totalServed: 0,
     fridge: { level: 0, capacity: FRIDGE_LEVELS[0].capacity, items: { tteok: 3, fishcake: 4, rice: 2, seaweed: 2, veggie: 3, noodle: 2, egg: 2 } },
+    shopLevel: 0,       // 가게 확장 단계 (0: 작은 분식집)
     layout: [
-      { type: 'table_wood', x: 1, y: 0 },
-      { type: 'table_wood', x: 3, y: 1 },
-      { type: 'plant_pot', x: 4, y: 0 },
+      { type: 'table_wood', x: 1, y: 0 },   // 처음엔 테이블 하나
     ],
     inventory: {},
     staff: [],          // [{ role: 'cleaner'|'server'|'guard', tier: 1~4, day: 고용일 }]
@@ -51,11 +51,6 @@ let scope = '';
 const keyOf = (id) => (id ? `${SAVE_KEY}:${id}` : SAVE_KEY);
 export function setSaveScope(id) {
   scope = id || '';
-  // 로그인 기능 이전에 만든 가게는 처음 로그인한 계정으로 옮김
-  if (scope && !localStorage.getItem(keyOf(scope)) && localStorage.getItem(SAVE_KEY)) {
-    localStorage.setItem(keyOf(scope), localStorage.getItem(SAVE_KEY));
-    localStorage.removeItem(SAVE_KEY);
-  }
 }
 /** 다른 계정(같은 기기 친구) 가게 읽기 */
 export function loadShopOf(id) { return loadShop(id); }
@@ -68,6 +63,7 @@ export function loadShop(id = scope) {
       for (const it of s.layout || []) if (it.type === 'lamp') it.type = 'trophy';
       if (s.inventory?.lamp) { s.inventory.trophy = (s.inventory.trophy || 0) + s.inventory.lamp; delete s.inventory.lamp; }
       s.layout = (s.layout || []).filter((it) => ITEMS[it.type]);
+      if (s.shopLevel === undefined) s.shopLevel = SHOP_LEVELS.length - 1;
       fitLayout(s);
       s.staff = (s.staff || []).filter((x) => staffTier(x.role, x.tier));
       return { ...newShop(), ...s };
@@ -191,6 +187,18 @@ export function autoShop(state) {
   return bought;
 }
 
+// 가게 확장: 방이 넓어지고 테이블 자리가 늘어남
+export function nextShopLevel(state) { return SHOP_LEVELS[(state.shopLevel ?? 0) + 1] || null; }
+export function expandShop(state) {
+  const next = nextShopLevel(state);
+  if (!next || state.money < next.price) return false;
+  state.money -= next.price;
+  state.today.expense += next.price;
+  state.shopLevel = (state.shopLevel ?? 0) + 1;
+  fitLayout(state);
+  return true;
+}
+
 export function upgradeFridge(state) {
   const next = FRIDGE_LEVELS[state.fridge.level + 1];
   if (!next || state.money < next.price) return false;
@@ -204,7 +212,7 @@ export function upgradeFridge(state) {
 // ---------- 가구 배치 ----------
 // 칸 밖에 있거나 겹친 가구는 빈 칸으로 옮기고, 자리가 없으면 창고로
 export function fitLayout(s) {
-  const { cols, rows } = LAYOUT_GRID;
+  const { cols, rows } = gridOf(s);
   const used = new Set();
   const keep = [];
   const move = [];

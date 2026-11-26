@@ -2,10 +2,11 @@
 // - 학급 서버(Firebase) 연결 전: 같은 기기에 있는 같은 반 계정 + 체험용 가상 친구 5명
 // - 3차에서 Firebase를 연결하면 이 파일의 저장소 부분만 Firestore(shops / guestbooks)로 바뀜
 import { isFirebaseEnabled } from './firebase-config.js';
-import { loadShopOf } from './shop-engine.js';
+import { loadShopOf, fitLayout } from './shop-engine.js';
 import { classmatesOnDevice } from './account.js';
 import { ITEMS, FRIDGE_LEVELS } from './data-interior.js';
 import { staffTier } from './data-staff.js';
+import { SHOP_LEVELS } from './shop-levels.js';
 
 const KEY = 'chefmaster_social_v1';
 export const CHEERS_PER_DAY = 3;
@@ -28,26 +29,26 @@ const today = () => new Date().toISOString().slice(0, 10); // 응원 횟수는 �
 
 // ---------- 체험용 가상 친구 (학급 서버 연결 전에도 기능을 체험) ----------
 const DEMO_FRIENDS = [
-  { id: 'demo_1', name: '하늘', chefLook: 'chef_f', day: 12, rating: 4.1, perfect: 64, money: 412000, fridge: 3,
+  { id: 'demo_1', name: '하늘', level: 1, chefLook: 'chef_f', day: 12, rating: 4.1, perfect: 64, money: 412000, fridge: 3,
     layout: [['table_long', 0, 0], ['table_wood', 2, 0], ['table_long', 4, 0], ['table_wood', 1, 1], ['plant_pot', 3, 1], ['trophy', 4, 1]],
     staff: [['cleaner', 2], ['server', 1]] },
-  { id: 'demo_2', name: '도윤', chefLook: 'chef_m', day: 7, rating: 3.6, perfect: 28, money: 158000, fridge: 1,
+  { id: 'demo_2', name: '도윤', level: 0, chefLook: 'chef_m', day: 7, rating: 3.6, perfect: 28, money: 158000, fridge: 1,
     layout: [['table_wood', 0, 0], ['table_wood', 2, 0], ['table_wood', 4, 0], ['aboard', 0, 1], ['table_wood', 3, 1]],
     staff: [['guard', 1]] },
-  { id: 'demo_3', name: '서아', chefLook: 'chef_f', day: 18, rating: 4.5, perfect: 131, money: 890000, fridge: 5,
+  { id: 'demo_3', name: '서아', level: 2, chefLook: 'chef_f', day: 18, rating: 4.5, perfect: 131, money: 890000, fridge: 5,
     layout: [['table_long', 0, 0], ['table_long', 2, 0], ['table_long', 4, 0], ['table_long', 1, 1], ['table_long', 3, 1], ['trophy', 0, 1], ['plant_pot', 4, 1]],
     staff: [['cleaner', 3], ['server', 2], ['guard', 2]] },
-  { id: 'demo_4', name: '지후', chefLook: 'chef_m', day: 4, rating: 3.2, perfect: 9, money: 41000, fridge: 0,
+  { id: 'demo_4', name: '지후', level: 0, chefLook: 'chef_m', day: 4, rating: 3.2, perfect: 9, money: 41000, fridge: 0,
     layout: [['table_wood', 1, 0], ['table_wood', 3, 1], ['plant_pot', 4, 0]],
     staff: [] },
-  { id: 'demo_5', name: '유나', chefLook: 'chef_f', day: 10, rating: 3.9, perfect: 47, money: 276000, fridge: 2,
+  { id: 'demo_5', name: '유나', level: 1, chefLook: 'chef_f', day: 10, rating: 3.9, perfect: 47, money: 276000, fridge: 2,
     layout: [['table_wood', 0, 0], ['table_long', 2, 0], ['table_wood', 4, 0], ['plant_pot', 0, 1], ['aboard', 2, 1], ['table_wood', 4, 1]],
     staff: [['server', 1], ['cleaner', 1]] },
 ];
 
 function demoShop(f) {
   return {
-    id: f.id, demo: true, name: f.name, chefLook: f.chefLook, day: f.day, branch: 1, rating: f.rating,
+    id: f.id, demo: true, shopLevel: f.level, name: f.name, chefLook: f.chefLook, day: f.day, branch: 1, rating: f.rating,
     perfectCookCount: f.perfect, money: f.money,
     layout: f.layout.map(([type, x, y]) => ({ type, x, y })),
     staff: f.staff.map(([role, tier]) => ({ role, tier })),
@@ -56,6 +57,7 @@ function demoShop(f) {
     inventory: {}, recipes: {}, today: { expense: 0 },
   };
 }
+function demoShopFit(f) { const s = demoShop(f); fitLayout(s); return s; }
 
 // ---------- 저장소 (로컬) ----------
 function load() {
@@ -77,7 +79,7 @@ export function listClassmates(me) {
     const s = loadShopOf(a.id);
     return s ? { ...s, id: a.id, name: a.name } : null;
   }).filter(Boolean);
-  return [...real, ...DEMO_FRIENDS.map(demoShop)];
+  return [...real, ...DEMO_FRIENDS.map(demoShopFit)];
 }
 
 function sentToday(d, myId) {
@@ -144,7 +146,8 @@ export function totalAssets(s) {
     .reduce((t, type) => t + (ITEMS[type]?.price || 0), 0);
   const fridge = FRIDGE_LEVELS.slice(1, (s.fridge?.level || 0) + 1).reduce((t, l) => t + l.price, 0);
   const staff = (s.staff || []).reduce((t, x) => t + (staffTier(x.role, x.tier)?.hire || 0), 0);
-  return Math.round((s.money || 0) + furniture + fridge + staff);
+  const shop = SHOP_LEVELS.slice(1, (s.shopLevel ?? 0) + 1).reduce((t, l) => t + l.price, 0);
+  return Math.round((s.money || 0) + furniture + fridge + staff + shop);
 }
 
 export const RANKINGS = {

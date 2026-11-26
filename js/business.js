@@ -6,8 +6,8 @@ import {
   MENUS, ITEMS, GRADE, TIP_RATE, tablesOf, branchMenus, canCook, anyCookable,
   consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf,
 } from './shop-engine.js';
-import { LAYOUT_GRID } from './data-interior.js';
-import { px, room, DISH_PX, ITEM_PX } from './px.js';
+import { geometry, levelOf } from './shop-levels.js';
+import { px, roomFor, DISH_PX, ITEM_PX } from './px.js';
 
 export const DAY_LENGTH = 150;      // 실제 초 (2분 30초)
 const EAT_TIME = 4.0;
@@ -18,21 +18,13 @@ const COOK_TIME = 0.9;
 const CHEF_SWEEP_TIME = 1.5;
 const OPEN_HOUR = 11, CLOSE_HOUR = 21;
 
-// ---------- 방 좌표 (1배 픽셀) ----------
-export const RW = 448, RH = 256;
+// ---------- 방 좌표 (1배 픽셀) — 가게 확장 단계에 따라 바뀜 (shop-levels.js) ----------
 const BAR_H = 26;                 // 하단 UI 바가 덮는 높이
-const KITCHEN_Y = 84;             // 주방 기구 바닥선 (뒷벽 앞)
-const KITCHEN = { x0: 41, x1: 300, y0: 48, y1: 100 };            // 주방 타일 바닥
-const BAR = { x0: 28, x1: 300, top: 98, base: 121, vx1: 40, vy0: 50 }; // ㄱ자 바 (긴 카운터 + 벽까지 꺾인 카운터)
-const KDOOR_X = 308;              // 주방 출입구 (바 오른쪽 끝)
-const HALL = { x0: 24, x1: 424, y0: 140, y1: 232 };
-const DOOR = { x: 64, y: 252 };   // 왼쪽 아래 입구
-const AISLE_Y = 186;              // 테이블 두 줄 사이 통로
-const PASS = { x: 262, y: 137 };  // 바 위 완성 요리를 가져가는 자리
-const CHEF_HOME = { x: 160, y: 94 };
-const HALL_TOP = 137;             // 바 앞 통로
-const STOOLS = [70, 110, 150, 190, 230];
-const LAMPS = [120, 340];
+let RW, RH, KITCHEN_Y, KITCHEN, BAR, KDOOR_X, HALL, DOOR, AISLE_Y, PASS, PASS_DISH_X, CHEF_HOME, HALL_TOP, STOOLS, LAMPS, APPL, POS_X, CHALK_X, HOMES, GRID;
+function applyGeometry(level) {
+  ({ RW, RH, KITCHEN_Y, KITCHEN, BAR, KDOOR_X, HALL, DOOR, AISLE_Y, PASS, PASS_DISH_X, CHEF_HOME, HALL_TOP, STOOLS, LAMPS, APPL, POS_X, CHALK_X, HOMES, GRID } = geometry(level));
+}
+applyGeometry(2);
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -42,8 +34,8 @@ const ROWDY_TYPES = ['rowdy_loud', 'rowdy_picky', 'rowdy_sneak'];
 const GUEST_TYPES = ['cust_office_m', 'cust_kid', 'cust_office_f'];
 
 export function slotCenter(gx, gy) {
-  const cw = (HALL.x1 - HALL.x0) / LAYOUT_GRID.cols;
-  const ch = (HALL.y1 - HALL.y0) / LAYOUT_GRID.rows;
+  const cw = (HALL.x1 - HALL.x0) / GRID.cols;
+  const ch = (HALL.y1 - HALL.y0) / GRID.rows;
   return { x: Math.round(HALL.x0 + (gx + 0.5) * cw), y: Math.round(HALL.y0 + (gy + 0.5) * ch), cw, ch };
 }
 
@@ -88,7 +80,11 @@ export class Business {
 
   // 가구·직원 배치가 바뀌면 다시 구성
   rebuild() {
+    this.level = levelOf(this.state);
+    applyGeometry(this.level);
     this.forecast = currentForecast(this.state);
+    this._bar = null; this._tiles = null;
+    if (this.pxCanvas && this.s) this.resize();
     this.tables = [];
     this.seats = [];
     for (const t of tablesOf(this.state)) {
@@ -115,6 +111,7 @@ export class Business {
     // 사장님 + 종업원
     const look = this.state.chefLook || 'chef_m';
     this.chef = this.chef || this.actor(look, CHEF_HOME, 120, 'dir4');
+    if (this.chef.mode === 'idle' || !this.chef.mode) { this.chef.x = CHEF_HOME.x; this.chef.y = CHEF_HOME.y; this.chef.path = []; }
     this.chef.sheet = look;
     Object.assign(this.chef, { tasks: this.chef.tasks || [], mode: this.chef.mode || 'idle', idleDir: 'back' });
     this.pass = this.pass || [];
@@ -122,9 +119,9 @@ export class Business {
     const sv = staffOf(this.state, 'server');
     const gd = staffOf(this.state, 'guard');
     const keep = (old, def) => (old && old.def?.id === def?.id ? old : null);
-    this.cleaner = cl ? keep(this.cleaner, cl) || Object.assign(this.actor(cl.id, { x: 372, y: 128 }, cl.speed * 0.5, 'single'), { def: cl, home: { x: 372, y: 128 }, mode: 'idle', tasks: [] }) : null;
-    this.server = sv ? keep(this.server, sv) || Object.assign(this.actor(`server${sv.tier}`, { x: 338, y: 134 }, sv.speed * 0.5, 'dir4'), { def: sv, home: { x: 338, y: 134 }, mode: 'idle' }) : null;
-    this.guard = gd ? keep(this.guard, gd) || Object.assign(this.actor(gd.id, { x: 92, y: 228 }, gd.speed * 0.5, 'single'), { def: gd, home: { x: 92, y: 228 }, mode: 'idle' }) : null;
+    this.cleaner = cl ? keep(this.cleaner, cl) || Object.assign(this.actor(cl.id, HOMES.cleaner, cl.speed * 0.5, 'single'), { def: cl, home: HOMES.cleaner, mode: 'idle', tasks: [] }) : null;
+    this.server = sv ? keep(this.server, sv) || Object.assign(this.actor(`server${sv.tier}`, HOMES.server, sv.speed * 0.5, 'dir4'), { def: sv, home: HOMES.server, mode: 'idle' }) : null;
+    this.guard = gd ? keep(this.guard, gd) || Object.assign(this.actor(gd.id, HOMES.guard, gd.speed * 0.5, 'single'), { def: gd, home: HOMES.guard, mode: 'idle' }) : null;
     this.patienceMult = sv ? sv.patienceMult : 1;
     this.staffList = [this.cleaner, this.server, this.guard].filter(Boolean);
   }
@@ -264,11 +261,11 @@ export class Business {
   }
 
   entryPath(seat) {
-    return [{ x: DOOR.x, y: 238 }, { x: DOOR.x, y: AISLE_Y }, { x: seat.x, y: AISLE_Y }, seat];
+    return [{ x: DOOR.x, y: RH - 18 }, { x: DOOR.x, y: AISLE_Y }, { x: seat.x, y: AISLE_Y }, seat];
   }
 
   exitPath(from) {
-    return [{ x: from.x, y: AISLE_Y }, { x: DOOR.x, y: AISLE_Y }, { x: DOOR.x, y: 238 }, { x: DOOR.x + rand(-3, 3), y: RH + 24 }];
+    return [{ x: from.x, y: AISLE_Y }, { x: DOOR.x, y: AISLE_Y }, { x: DOOR.x, y: RH - 18 }, { x: DOOR.x + rand(-3, 3), y: RH + 24 }];
   }
 
   // 사장님 동선: 주방 안 ↔ 홀은 바 오른쪽 출입구로만
@@ -555,7 +552,7 @@ export class Business {
 
   // ---------- 입력 ----------
   slotAt(p) {
-    const { cols, rows } = LAYOUT_GRID;
+    const { cols, rows } = GRID;
     const cw = (HALL.x1 - HALL.x0) / cols, ch = (HALL.y1 - HALL.y0) / rows;
     const gx = Math.floor((p.x - HALL.x0) / cw), gy = Math.floor((p.y - HALL.y0) / ch);
     return gx >= 0 && gy >= 0 && gx < cols && gy < rows ? { gx, gy } : null;
@@ -697,7 +694,7 @@ export class Business {
   }
 
   // ---------- 이펙트 ----------
-  panPos() { const s = px('stove'); return { x: 166, y: KITCHEN_Y - (s ? s.height : 30) + 6 }; }
+  panPos() { const s = px('stove'); return { x: APPL.stove + 6, y: KITCHEN_Y - (s ? s.height : 30) + 6 }; }
   steam(strong) { const p = this.panPos(); this.particles.push({ kind: 'steam', x: p.x + rand(-4, 4), y: p.y, vx: rand(-1, 1), vy: -rand(6, 12), life: 0, max: strong ? 1 : 1.5 }); }
   sparkle(x, y, n) { for (let i = 0; i < n; i++) this.particles.push({ kind: 'spark', x: x + rand(-10, 10), y: y + rand(-6, 4), vx: rand(-6, 6), vy: -rand(4, 14), life: 0, max: rand(0.5, 1) }); }
   smoke(x, y, n) { for (let i = 0; i < n; i++) this.particles.push({ kind: 'smoke', x: x + rand(-6, 6), y: y + rand(-3, 3), vx: rand(-3, 3), vy: -rand(6, 12), life: 0, max: rand(0.8, 1.4) }); }
@@ -717,22 +714,22 @@ export class Business {
     const g = this.px;
     g.fillStyle = '#0b0705';
     g.fillRect(0, 0, this.vw, this.vh);
-    const R = room();
+    const R = roomFor(this.level);
     if (R) g.drawImage(R, this.ox, this.oy);
 
     // 주방 타일 바닥 + 벽 장식
     g.drawImage(this.kitchenTiles(), KITCHEN.x0 + this.ox, KITCHEN.y0 + this.oy);
-    this.spr('chalkboard', 236, 44);
+    this.spr('chalkboard', CHALK_X, 44);
     for (const lx of LAMPS) this.spr('lantern', lx, 34);
 
     const items = [];
     const add = (y, fn) => items.push({ y, fn });
-    add(KITCHEN_Y, () => this.spr('rack', 72, KITCHEN_Y));
-    add(KITCHEN_Y, () => this.spr('fridge', 112, KITCHEN_Y));
-    add(KITCHEN_Y, () => this.spr('stove', 160, KITCHEN_Y));
+    add(KITCHEN_Y, () => this.spr('rack', APPL.rack, KITCHEN_Y));
+    add(KITCHEN_Y, () => this.spr('fridge', APPL.fridge, KITCHEN_Y));
+    add(KITCHEN_Y, () => this.spr('stove', APPL.stove, KITCHEN_Y));
     add(BAR.base, () => this.drawBar());
     for (const x of STOOLS) add(134, () => g.drawImage(this.stool(), x - 6 + this.ox, 134 - 14 + this.oy));
-    add(112, () => this.spr('pos', 330, 112));
+    add(112, () => this.spr('pos', POS_X, 112));
     for (const tb of this.tables) add(tb.base, () => this.spr(ITEM_PX[tb.type], tb.cx, tb.base));
     for (const s of this.seats) {
       if (s.dish) add(s.base + 0.5, () => this.spr(s.dish.sprite, s.trashPos.x, s.trashPos.y + 4));
@@ -821,7 +818,7 @@ export class Business {
   drawBar() {
     this.px.drawImage(this.barCanvas(), this.ox, this.oy);
     // 바 위에 올려 둔 완성 요리 (서빙 담당이 가져감)
-    this.pass.forEach((task, i) => this.spr(task.grade === 1 ? 'dish_burnt' : DISH_PX[task.c.menuId], 240 + (i % 4) * 14, BAR.top + 8 - Math.floor(i / 4) * 4));
+    this.pass.forEach((task, i) => this.spr(task.grade === 1 ? 'dish_burnt' : DISH_PX[task.c.menuId], PASS_DISH_X + (i % 4) * 14, BAR.top + 8 - Math.floor(i / 4) * 4));
   }
 
   drawTrash(s) {
@@ -907,7 +904,7 @@ export class Business {
 
   drawSlots() {
     const g = this.px;
-    const { cols, rows } = LAYOUT_GRID;
+    const { cols, rows } = GRID;
     for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
       const c = slotCenter(x, y);
       const X = Math.round(c.x - c.cw / 2 + 2 + this.ox), Y = Math.round(c.y - c.ch / 2 + 2 + this.oy);

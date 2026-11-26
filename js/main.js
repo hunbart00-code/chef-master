@@ -7,7 +7,9 @@ import {
   branchMenus, cookableCount, anyCookable, menuPrice, isBankrupt, settleDay, decoBonus, tablesOf,
   INGREDIENTS, MENUS, ITEMS, FRIDGE_LEVELS, RESCUE_BASE, RESCUE_PER_CORRECT, won,
   hireStaff, fireStaff, staffOf, totalWages, sellIngredient, clearFridge, missingHint, setSaveScope,
+  expandShop, nextShopLevel,
 } from './shop-engine.js';
+import { SHOP_LEVELS, gridOf } from './shop-levels.js';
 import { tryLogin, createAccount, lastLogin } from './account.js';
 import { STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js';
 import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js';
@@ -212,7 +214,7 @@ function refreshPrep() {
 }
 
 // ---------- 팝업 패널 ----------
-const PANEL_TITLES = { ing: '🛒 식재료 구매', staff: '👥 종업원 고용', kitchen: '🧊 주방 설비', friends: '🏘️ 친구 가게', rank: '🏆 학급 랭킹' };
+const PANEL_TITLES = { ing: '🛒 식재료 구매', staff: '👥 종업원 고용', kitchen: '🏗️ 가게 확장 · 주방 설비', friends: '🏘️ 친구 가게', rank: '🏆 학급 랭킹' };
 
 function openPanel(kind) {
   if (kind === 'layout') { closePanel(); startEdit(); return; }
@@ -369,11 +371,22 @@ function staffHtml() {
 function kitchenHtml() {
   const lv = state.fridge.level;
   const next = FRIDGE_LEVELS[lv + 1];
-  return `<div class="upgrade-card">${pxImg('fridge', 2)}
+  const cur = SHOP_LEVELS[state.shopLevel ?? 0];
+  const nx = nextShopLevel(state);
+  const g = gridOf(state);
+  const expand = `<div class="upgrade-card expand">
+      <span class="up-ico">🏗️</span>
+      <div><b>${cur.name}</b> <span class="muted small">(테이블 자리 ${g.cols * g.rows}칸)</span>
+        <p>${nx ? `다음: <b>${nx.name}</b> — 가게가 넓어지고 테이블 자리가 ${nx.cols * nx.rows}칸으로 늘어나요.` : '가장 넓은 가게예요! (2호점 확장은 다음 업데이트)'}</p></div>
+      ${nx ? `<button class="px-btn ${state.money >= nx.price ? 'go' : 'off'}" data-expand>확장 ${won(nx.price)}</button>` : '<span class="muted">MAX</span>'}
+    </div>`;
+  return expand + `<div class="upgrade-card">${pxImg('fridge', 2)}
       <div><b>냉장고 Lv.${lv + 1}</b><p>보관 ${state.fridge.capacity}칸${next ? ` → 다음 ${next.capacity}칸` : ' (최대)'}</p></div>
       ${next ? `<button class="px-btn go" data-fridge>업그레이드 ${won(next.price)}</button>` : '<span class="muted">MAX</span>'}
     </div>
-    <p class="small muted">재료는 상하지 않아요. 냉장고가 클수록 하루에 더 많은 손님을 받을 수 있어요.</p>`;
+    <p class="small muted">재료는 상하지 않아요. 냉장고가 클수록 하루에 더 많은 손님을 받을 수 있어요.</p>
+    <div class="danger-zone"><span class="small muted">가게를 DAY 1부터 다시 시작하고 싶다면</span>
+      <button class="px-btn tiny" data-reset>처음부터 다시</button></div>`;
 }
 
 function bindPanel() {
@@ -416,6 +429,29 @@ function bindPanel() {
       toast(n ? `🧺 재료 ${n}개를 골고루 샀어요!` : '더 살 수 없어요 (냉장고/자금 부족)');
       if (n) sfx.play('coin');
       persist(); refreshPrep();
+      return;
+    }
+    if (e.target.closest('[data-expand]')) {
+      const nx = nextShopLevel(state);
+      if (!nx) return;
+      if (state.money < nx.price) { toast(`확장 비용 ${won(nx.price)}이 필요해요! 💸`); return; }
+      if (!(await confirmBox(`<b>${nx.name}</b>(으)로 가게를 넓힐까요?<br>${won(nx.price)} · 테이블 자리 ${nx.cols * nx.rows}칸`))) return;
+      expandShop(state);
+      sfx.play('perfect');
+      toast(`🏗️ ${nx.name}(으)로 확장 완료! 🪑 배치에서 테이블을 더 놓아요.`);
+      persist(); scene.rebuild(); refreshPrep();
+      return;
+    }
+    if (e.target.closest('[data-reset]')) {
+      if (!(await confirmBox('정말 <b>DAY 1부터 다시</b> 시작할까요?<br><small>돈·가구·직원·기록이 모두 사라져요.</small>'))) return;
+      if (!(await confirmBox('한 번 더 확인할게요. 되돌릴 수 없어요!'))) return;
+      const keep = { accountId: state.accountId, ban: state.ban, no: state.no, name: state.name, chefLook: state.chefLook };
+      clearShop(); engine.reset();
+      state = Object.assign(newShop(keep.name), keep);
+      saveShop(state);
+      closePanel();
+      enterPrep();
+      toast('새 가게로 다시 시작해요! 🍜');
       return;
     }
     if (e.target.closest('[data-fridge]')) {
@@ -471,7 +507,7 @@ function renderTray() {
       ${pxImg(ITEM_PX[type], 1)}<b>${inv}</b>
       <button class="px-btn tiny" data-buyitem="${type}">${won(it.price)}</button>
     </span>`;
-  }).join('') + `<span class="tray-info">테이블 ${tablesOf(state).length} · 별점 +${decoBonus(state).toFixed(2)}</span>`;
+  }).join('') + `<span class="tray-info">테이블 ${tablesOf(state).length} · 자리 ${state.layout.length}/${gridOf(state).cols * gridOf(state).rows}<br>별점 +${decoBonus(state).toFixed(2)}</span>`;
 }
 
 function onSlot(gx, gy) {
