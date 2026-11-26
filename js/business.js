@@ -19,14 +19,20 @@ const CHEF_SWEEP_TIME = 1.5;
 const OPEN_HOUR = 11, CLOSE_HOUR = 21;
 
 // ---------- 방 좌표 (1배 픽셀) ----------
-export const RW = 448, RH = 232;
-const BAR_H = 30;                 // 하단 UI 바가 덮는 높이
-const KITCHEN_Y = 90;             // 주방 기구 바닥선
-const HALL = { x0: 24, x1: 424, y0: 108, y1: 212 };
-const DOOR = { x: 224, y: 228 };
-const PASS = { x: 132, y: 100 };  // 식기 반납대 = 완성 요리 대기
-const CHEF_HOME = { x: 86, y: 100 };
-const HALL_TOP = 104;             // 홀 이동 통로
+export const RW = 448, RH = 256;
+const BAR_H = 26;                 // 하단 UI 바가 덮는 높이
+const KITCHEN_Y = 84;             // 주방 기구 바닥선 (뒷벽 앞)
+const KITCHEN = { x0: 41, x1: 300, y0: 48, y1: 100 };            // 주방 타일 바닥
+const BAR = { x0: 28, x1: 300, top: 98, base: 121, vx1: 40, vy0: 50 }; // ㄱ자 바 (긴 카운터 + 벽까지 꺾인 카운터)
+const KDOOR_X = 308;              // 주방 출입구 (바 오른쪽 끝)
+const HALL = { x0: 24, x1: 424, y0: 140, y1: 232 };
+const DOOR = { x: 64, y: 252 };   // 왼쪽 아래 입구
+const AISLE_Y = 186;              // 테이블 두 줄 사이 통로
+const PASS = { x: 262, y: 137 };  // 바 위 완성 요리를 가져가는 자리
+const CHEF_HOME = { x: 160, y: 94 };
+const HALL_TOP = 137;             // 바 앞 통로
+const STOOLS = [70, 110, 150, 190, 230];
+const LAMPS = [120, 340];
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -116,9 +122,9 @@ export class Business {
     const sv = staffOf(this.state, 'server');
     const gd = staffOf(this.state, 'guard');
     const keep = (old, def) => (old && old.def?.id === def?.id ? old : null);
-    this.cleaner = cl ? keep(this.cleaner, cl) || Object.assign(this.actor(cl.id, { x: 176, y: 100 }, cl.speed * 0.5, 'single'), { def: cl, home: { x: 176, y: 100 }, mode: 'idle', tasks: [] }) : null;
-    this.server = sv ? keep(this.server, sv) || Object.assign(this.actor(`server${sv.tier}`, { x: 200, y: 102 }, sv.speed * 0.5, 'dir4'), { def: sv, home: { x: 200, y: 102 }, mode: 'idle' }) : null;
-    this.guard = gd ? keep(this.guard, gd) || Object.assign(this.actor(gd.id, { x: 196, y: 204 }, gd.speed * 0.5, 'single'), { def: gd, home: { x: 196, y: 204 }, mode: 'idle' }) : null;
+    this.cleaner = cl ? keep(this.cleaner, cl) || Object.assign(this.actor(cl.id, { x: 372, y: 128 }, cl.speed * 0.5, 'single'), { def: cl, home: { x: 372, y: 128 }, mode: 'idle', tasks: [] }) : null;
+    this.server = sv ? keep(this.server, sv) || Object.assign(this.actor(`server${sv.tier}`, { x: 338, y: 134 }, sv.speed * 0.5, 'dir4'), { def: sv, home: { x: 338, y: 134 }, mode: 'idle' }) : null;
+    this.guard = gd ? keep(this.guard, gd) || Object.assign(this.actor(gd.id, { x: 92, y: 228 }, gd.speed * 0.5, 'single'), { def: gd, home: { x: 92, y: 228 }, mode: 'idle' }) : null;
     this.patienceMult = sv ? sv.patienceMult : 1;
     this.staffList = [this.cleaner, this.server, this.guard].filter(Boolean);
   }
@@ -128,7 +134,7 @@ export class Business {
   }
 
   guestActor(rowdy) {
-    const a = { x: DOOR.x + rand(-4, 4), y: RH + 18, path: [], speed: rand(52, 64), t: Math.random() * 10, dir: 'back', face: 1 };
+    const a = { x: DOOR.x + rand(-3, 3), y: RH + 18, path: [], speed: rand(52, 64), t: Math.random() * 10, dir: 'back', face: 1 };
     a.kind = 'single';
     a.sheet = pick(rowdy ? ROWDY_TYPES : GUEST_TYPES);
     return a;
@@ -155,7 +161,7 @@ export class Business {
     const wrap = this.pxCanvas.parentElement;
     const W = wrap.clientWidth, Hh = wrap.clientHeight;
     // 하단 바는 방 아래쪽 돌벽 위에 겹쳐도 되므로 방 높이 기준으로 맞춤
-    const fit = Math.min(W / RW, Hh / (RH + 6));
+    const fit = Math.min(W / RW, Hh / RH);
     // 정수배가 원칙, 단 내림 때문에 화면이 20% 넘게 비면 소수배 허용 (1280×800 크롬북 등)
     const s = Math.floor(fit) >= 2 && Math.floor(fit) / fit >= 0.8 ? Math.floor(fit) : Math.max(1, fit);
     this.s = s;
@@ -256,11 +262,21 @@ export class Business {
   }
 
   entryPath(seat) {
-    return [{ x: DOOR.x, y: DOOR.y - 6 }, { x: DOOR.x, y: HALL.y1 - 2 }, { x: seat.x, y: HALL.y1 - 2 }, seat];
+    return [{ x: DOOR.x, y: 238 }, { x: DOOR.x, y: AISLE_Y }, { x: seat.x, y: AISLE_Y }, seat];
   }
 
   exitPath(from) {
-    return [{ x: from.x, y: HALL.y1 - 2 }, { x: DOOR.x, y: HALL.y1 - 2 }, { x: DOOR.x, y: DOOR.y - 6 }, { x: DOOR.x + rand(-4, 4), y: RH + 24 }];
+    return [{ x: from.x, y: AISLE_Y }, { x: DOOR.x, y: AISLE_Y }, { x: DOOR.x, y: 238 }, { x: DOOR.x + rand(-3, 3), y: RH + 24 }];
+  }
+
+  // 사장님 동선: 주방 안 ↔ 홀은 바 오른쪽 출입구로만
+  inKitchen(p) { return p.y < BAR.base - 2 && p.x < KDOOR_X - 2; }
+  route(a, dest) {
+    const ai = this.inKitchen(a), di = this.inKitchen(dest);
+    if (ai && di) return [{ x: a.x, y: CHEF_HOME.y }, dest];
+    if (ai) return [{ x: a.x, y: CHEF_HOME.y }, { x: KDOOR_X, y: CHEF_HOME.y }, { x: KDOOR_X, y: HALL_TOP }, { x: dest.x, y: HALL_TOP }, dest];
+    if (di) return [{ x: a.x, y: HALL_TOP }, { x: KDOOR_X, y: HALL_TOP }, { x: KDOOR_X, y: CHEF_HOME.y }, dest];
+    return [{ x: a.x, y: HALL_TOP }, { x: dest.x, y: HALL_TOP }, dest];
   }
 
   // ---------- 손님 ----------
@@ -353,10 +369,10 @@ export class Business {
           const t = ch.task.t;
           if (!t.trash) { t.reserved = false; break; }
           ch.mode = 'toTrash';
-          ch.path = [{ x: ch.x, y: HALL_TOP }, t.serve];
+          ch.path = this.route(ch, t.serve);
         } else {
           ch.mode = 'toStove';
-          ch.path = dist(ch, CHEF_HOME) > 2 ? [{ x: ch.x, y: HALL_TOP }, CHEF_HOME] : [];
+          ch.path = dist(ch, CHEF_HOME) > 2 ? this.route(ch, CHEF_HOME) : [];
         }
         break;
       case 'toStove':
@@ -374,7 +390,7 @@ export class Business {
           if (this.server) { this.pass.push(ch.task); ch.mode = 'idle'; } else {
             ch.carry = ch.task;
             ch.mode = 'delivering';
-            ch.path = [{ x: ch.x, y: HALL_TOP }, ch.task.c.table.serve];
+            ch.path = this.route(ch, ch.task.c.table.serve);
           }
         }
         break;
@@ -383,7 +399,7 @@ export class Business {
           this.serve(ch.carry.c, ch.carry.grade);
           ch.carry = null;
           ch.mode = 'returning';
-          ch.path = [{ x: ch.x, y: HALL_TOP }, CHEF_HOME];
+          ch.path = this.route(ch, CHEF_HOME);
         }
         break;
       case 'toTrash':
@@ -395,7 +411,7 @@ export class Business {
         if (ch.sweepT >= CHEF_SWEEP_TIME) {
           this.finishClean(ch.task.t);
           ch.mode = 'returning';
-          ch.path = [{ x: ch.x, y: HALL_TOP }, CHEF_HOME];
+          ch.path = this.route(ch, CHEF_HOME);
         }
         break;
       case 'returning':
@@ -456,7 +472,7 @@ export class Business {
     switch (sv.mode) {
       case 'idle':
         sv.idleDir = 'front';
-        if (this.pass.length) { sv.mode = 'toPass'; sv.path = [{ x: sv.x, y: HALL_TOP }, PASS]; }
+        if (this.pass.length) { sv.mode = 'toPass'; sv.path = [{ x: sv.x, y: HALL_TOP }, PASS]; sv.idleDir = 'back'; }
         break;
       case 'toPass':
         if (arrived) {
@@ -492,7 +508,7 @@ export class Business {
         const c = this.customers.find((x) => x.state === 'rowdy' && !x.handledBy && this.busy?.target !== x);
         if (!c) break;
         c.handledBy = gd; gd.target = c; gd.mode = 'going';
-        gd.path = [{ x: gd.x, y: HALL.y1 - 2 }, { x: c.table.serve.x, y: c.table.serve.y }];
+        gd.path = [{ x: gd.x, y: AISLE_Y }, { x: c.table.serve.x, y: AISLE_Y }, { x: c.table.serve.x, y: c.table.serve.y }];
         this.log(`🛡️ ${gd.def.name} 출동!`);
         break;
       }
@@ -651,7 +667,7 @@ export class Business {
   }
 
   // ---------- 이펙트 ----------
-  panPos() { const s = px('stove'); return { x: 92, y: KITCHEN_Y - (s ? s.height : 30) + 6 }; }
+  panPos() { const s = px('stove'); return { x: 166, y: KITCHEN_Y - (s ? s.height : 30) + 6 }; }
   steam(strong) { const p = this.panPos(); this.particles.push({ kind: 'steam', x: p.x + rand(-4, 4), y: p.y, vx: rand(-1, 1), vy: -rand(6, 12), life: 0, max: strong ? 1 : 1.5 }); }
   sparkle(x, y, n) { for (let i = 0; i < n; i++) this.particles.push({ kind: 'spark', x: x + rand(-10, 10), y: y + rand(-6, 4), vx: rand(-6, 6), vy: -rand(4, 14), life: 0, max: rand(0.5, 1) }); }
   smoke(x, y, n) { for (let i = 0; i < n; i++) this.particles.push({ kind: 'smoke', x: x + rand(-6, 6), y: y + rand(-3, 3), vx: rand(-3, 3), vy: -rand(6, 12), life: 0, max: rand(0.8, 1.4) }); }
@@ -674,19 +690,19 @@ export class Business {
     const R = room();
     if (R) g.drawImage(R, this.ox, this.oy);
 
-    // 벽 장식
+    // 주방 타일 바닥 + 벽 장식
+    g.drawImage(this.kitchenTiles(), KITCHEN.x0 + this.ox, KITCHEN.y0 + this.oy);
     this.spr('chalkboard', 236, 44);
-    this.spr('lantern', 180, 34);
-    this.spr('lantern', 300, 34);
+    for (const lx of LAMPS) this.spr('lantern', lx, 34);
 
     const items = [];
     const add = (y, fn) => items.push({ y, fn });
-    add(KITCHEN_Y, () => this.spr('fridge', 36, KITCHEN_Y));
-    add(KITCHEN_Y, () => this.spr('stove', 86, KITCHEN_Y));
-    add(KITCHEN_Y, () => this.spr('rack', 132, KITCHEN_Y));
-    add(KITCHEN_Y, () => this.spr('counter_a', 330, KITCHEN_Y + 4));
-    add(KITCHEN_Y, () => this.spr('counter_b', 368, KITCHEN_Y + 4));
-    add(KITCHEN_Y, () => this.spr('pos', 410, KITCHEN_Y + 4));
+    add(KITCHEN_Y, () => this.spr('rack', 72, KITCHEN_Y));
+    add(KITCHEN_Y, () => this.spr('fridge', 112, KITCHEN_Y));
+    add(KITCHEN_Y, () => this.spr('stove', 160, KITCHEN_Y));
+    add(BAR.base, () => this.drawBar());
+    for (const x of STOOLS) add(134, () => g.drawImage(this.stool(), x - 6 + this.ox, 134 - 14 + this.oy));
+    add(112, () => this.spr('pos', 330, 112));
     for (const tb of this.tables) add(tb.base, () => this.spr(ITEM_PX[tb.type], tb.cx, tb.base));
     for (const s of this.seats) {
       if (s.dish) add(s.base + 0.5, () => this.spr(s.dish.sprite, s.trashPos.x, s.trashPos.y + 4));
@@ -702,8 +718,6 @@ export class Business {
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.fn();
 
-    // 반납대 위 대기 요리
-    this.pass.forEach((task, i) => this.spr(task.grade === 1 ? 'dish_burnt' : DISH_PX[task.c.menuId], 126 + (i % 3) * 7, 66 - Math.floor(i / 3) * 5));
 
     this.drawParticles(dt);
     this.drawLight();
@@ -711,6 +725,73 @@ export class Business {
     if (this.mode === 'business') for (const c of this.customers) this.drawCustomerUI(c);
     this.drawBars();
     this.drawUI(dt);
+  }
+
+  // ---------- 바 (팔레트는 PixelLab 카운터에서 추출) ----------
+  kitchenTiles() {
+    if (this._tiles) return this._tiles;
+    const w = KITCHEN.x1 - KITCHEN.x0, h = KITCHEN.y1 - KITCHEN.y0;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    for (let y = 0; y < h; y += 8) for (let x = 0; x < w; x += 8) {
+      g.fillStyle = ((x + y) / 8) % 2 ? '#d9cbb0' : '#e8dcc4'; g.fillRect(x, y, 8, 8);
+      g.fillStyle = '#b8a888'; g.fillRect(x, y + 7, 8, 1); g.fillRect(x + 7, y, 1, 8);
+    }
+    const sh = g.createLinearGradient(0, 0, 0, 10); sh.addColorStop(0, 'rgba(40,20,5,0.45)'); sh.addColorStop(1, 'rgba(40,20,5,0)');
+    g.fillStyle = sh; g.fillRect(0, 0, w, 10);
+    return (this._tiles = c);
+  }
+
+  barCanvas() {
+    if (this._bar) return this._bar;
+    const c = document.createElement('canvas'); c.width = RW; c.height = BAR.base + 3;
+    const g = c.getContext('2d');
+    const P = { O: '#1a0e08', TH: '#c07e4c', T1: '#a3633a', T2: '#8e5530', LIP: '#734223', F1: '#6b3c21', F2: '#5a321c', FD: '#3e2214' };
+    const r = (col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+    const { x0, x1, top, base, vx1, vy0 } = BAR;
+    // 벽까지 꺾인 카운터 (윗면)
+    r(P.O, x0 - 1, vy0, vx1 - x0 + 2, top - vy0 + 1);
+    r(P.T1, x0, vy0, vx1 - x0, top - vy0);
+    r(P.TH, x0, vy0, 1, top - vy0); r(P.T2, vx1 - 1, vy0, 1, top - vy0);
+    for (let y = vy0 + 12; y < top; y += 14) r(P.T2, x0, y, vx1 - x0, 1);
+    // 긴 카운터
+    r(P.O, x0 - 1, top - 1, x1 - x0 + 2, base - top + 1);
+    r(P.T1, x0, top, x1 - x0, 10);
+    r(P.TH, x0, top, x1 - x0, 1);
+    r(P.T2, x0, top + 9, x1 - x0, 1);
+    for (let x = x0 + 30; x < x1; x += 34) r(P.T2, x, top + 1, 1, 8);
+    r(P.LIP, x0, top + 10, x1 - x0, 1);
+    r(P.FD, x0, top + 11, x1 - x0, 1);
+    r(P.F1, x0, top + 12, x1 - x0, base - top - 13);
+    for (let x = x0 + 4; x < x1; x += 8) r(P.FD, x, top + 12, 1, base - top - 13);
+    r(P.F2, x0, base - 3, x1 - x0, 2);
+    r(P.O, x0 - 1, base - 1, x1 - x0 + 2, 1);
+    g.clearRect(x1, top - 1, 1, 1); g.clearRect(x1, base - 1, 1, 1);
+    r('rgba(10,5,2,0.35)', x0, base, x1 - x0, 2);
+    // 바 위 소품: 병, 양념통
+    const bottle = (x, col) => { r(P.O, x - 1, top - 5, 5, 9); r(col, x, top - 4, 3, 7); r('#f3e2c0', x + 1, top - 3, 1, 2); r(P.O, x, top - 8, 3, 3); r(col, x + 1, top - 7, 1, 2); };
+    bottle(46, '#3d7a3a'); bottle(52, '#6b3c21'); bottle(58, '#3d6fb0');
+    r(P.O, 70, top - 1, 9, 6); r('#e8dcc4', 71, top, 7, 4); r('#e0533d', 72, top + 1, 2, 2); r('#ffd23f', 75, top + 1, 2, 2);
+    return (this._bar = c);
+  }
+
+  stool() {
+    if (this._stool) return this._stool;
+    const rows = [
+      '..OOOOOOOO..', '.OHHHHHHHHO.', 'OLLLLLLLLLLO', 'OLLLLLLLLLLO', '.OMMMMMMMMO.', '..OOOOOOOO..',
+      '..OD....DO..', '..OD....DO..', '..ODOOOODO..', '..ODDDDDDO..', '..OD....DO..', '..OD....DO..', '..OD....DO..', '..OO....OO..',
+    ];
+    const pal = { O: '#1a0e08', H: '#c07e4c', L: '#a3633a', M: '#734223', D: '#6b3c21' };
+    const c = document.createElement('canvas'); c.width = 12; c.height = rows.length;
+    const g = c.getContext('2d');
+    rows.forEach((row, y) => [...row].forEach((ch, x) => { if (pal[ch]) { g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); } }));
+    return (this._stool = c);
+  }
+
+  drawBar() {
+    this.px.drawImage(this.barCanvas(), this.ox, this.oy);
+    // 바 위에 올려 둔 완성 요리 (서빙 담당이 가져감)
+    this.pass.forEach((task, i) => this.spr(task.grade === 1 ? 'dish_burnt' : DISH_PX[task.c.menuId], 240 + (i % 4) * 14, BAR.top + 8 - Math.floor(i / 4) * 4));
   }
 
   drawTrash(s) {
@@ -783,7 +864,7 @@ export class Business {
     const g = this.px;
     g.save();
     g.globalCompositeOperation = 'lighter';
-    for (const lx of [180, 300]) {
+    for (const lx of LAMPS) {
       const gr = g.createRadialGradient(lx + this.ox, 40 + this.oy, 2, lx + this.ox, 40 + this.oy, 70);
       gr.addColorStop(0, 'rgba(255,180,90,0.20)'); gr.addColorStop(1, 'rgba(255,180,90,0)');
       g.fillStyle = gr; g.fillRect(lx - 70 + this.ox, this.oy, 140, 110);

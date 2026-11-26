@@ -119,10 +119,11 @@ img.pximg { image-rendering: pixelated; vertical-align: middle; }
 #bottomBar { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); max-width: calc(100vw - 12px); }
 .bb-row {
   display: flex; align-items: center; gap: 6px;
-  border-style: solid; border-width: calc(9px * var(--u));
-  border-image: url('../assets/px/ui_panel.png') 16 fill / calc(9px * var(--u)) stretch;
+  border-style: solid; border-width: calc(7px * var(--u));
+  border-image: url('../assets/px/ui_panel.png') 16 fill / calc(7px * var(--u)) stretch;
   image-rendering: pixelated; padding: 0 4px;
 }
+.bb-row .px-btn { min-height: calc(17px * var(--u)); }
 .bb-row .px-btn { font-size: 15px; }
 .px-bar.time { width: 220px; padding: 0; }
 .px-bar.time i { display: block; height: calc(5px * var(--u)); width: 100%; background: repeating-linear-gradient(90deg, #ffc83d 0 6px, #f0a020 6px 12px); transition: width 0.2s linear; }
