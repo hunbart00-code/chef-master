@@ -11,7 +11,7 @@ import {
 } from './shop-engine.js';
 import { SHOP_LEVELS, gridOf } from './shop-levels.js';
 import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js';
-import { initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js';
+import { liveClassControl, serverClosed, initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js';
 import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js';
 import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js';
 import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js';
@@ -55,6 +55,7 @@ export function applyClassControl(ctrl) {
   $('#lockOverlay').hidden = !classControl.isPaused;
   if (scene) scene.locked = classControl.isPaused;
   quiz.locked = classControl.isPaused;
+  liveClassControl(classControl);
 }
 
 // ---------- 공통 ----------
@@ -102,7 +103,7 @@ function updateHud(clock) {
 
 let myCodeHash = null;
 let unwatchClass = () => {};
-function persist(now = false) { saveShop(state); cloudSaveShop(state, myCodeHash, now); }
+function persist(now = false) { try { state.quizStats = engine.summary(); } catch (e) { /* ignore */ } saveShop(state); cloudSaveShop(state, myCodeHash, now); }
 
 // ---------- 씬 ----------
 function makeScene(st) {
@@ -153,6 +154,7 @@ function initTitle() {
   const form = () => ({ ban: $('#selBan').value, no: $('#selNo').value, name: $('#inpName').value.trim(), code: $('#inpCode').value.trim() });
   $('#btnLogin').onclick = async () => {
     const f = form();
+    if (serverClosed()) { toast('지금은 선생님이 게임 문을 닫았어요. 🔒'); return; }
     // 서버 모드: 서버에 있는 가게로 확인 (다른 기기에서 만든 계정도 로그인)
     if (cloudOn() && f.name && /^\d{4}$/.test(f.code)) {
       try {
@@ -800,7 +802,7 @@ async function init() {
   try { await Promise.all([loadSprites(), loadPx()]); } catch (e) { console.error('에셋 로드 실패', e); }
   try { await document.fonts.load('12px Galmuri11'); } catch (e) { /* 폰트 없이도 동작 */ }
   initTitle();
-  initLive({ scene: () => scene, toast });
+  initLive({ scene: () => scene, toast, persist: () => { if (state) persist(true); }, logout: () => { if (state) logout(); } });
   document.addEventListener('live:presence', () => { if (panelKind === 'friends') renderPanel(); if (visiting) renderVisitBar(); });
   bindPanel();
   bindEdit();

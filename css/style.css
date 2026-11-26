@@ -547,3 +547,25 @@ html.short #chatBox { top: 38px; height: calc(100vh - 84px); width: min(300px, 4
 html.short .chat-msg { font-size: 12px; }
 html.short .ann-text { font-size: 16px; }
 html.short #hudTR .chat-btn { min-height: 28px; font-size: 11px; padding: 0 6px; }
+
+/* ---------- 선생님 관리 ---------- */
+#teacherDesk.wide { width: min(860px, calc(100vw - 16px)); }
+.t-tabs { display: flex; gap: 6px; }
+.t-tabs .active { outline: 2px solid var(--gold); }
+.t-pane { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.t-pane[hidden] { display: none; }
+.t-sec.danger { border: 2px solid #8a2a1e; }
+.t-sec input { padding: 6px 8px; border: 2px solid #8a5a32; border-radius: 3px; background: #f3e2c0; color: #2a160b; font-size: 14px; user-select: text; }
+.t-sec b.ok, #tServerState b.ok { color: #6bd35f; } .t-sec b.no, #tServerState b.no, small.no { color: #ff8a7a; }
+#tBoard { max-height: 46vh; overflow: auto; width: 100%; }
+.t-board { width: 100%; border-collapse: collapse; font-size: 13px; }
+.t-board th { position: sticky; top: 0; background: #3b2416; color: var(--gold); padding: 4px; font-weight: 700; }
+.t-board td { padding: 3px 4px; border-bottom: 1px solid rgba(243,226,192,.12); text-align: center; white-space: nowrap; }
+.t-board td.nm { text-align: left; }
+.t-board td.weak { white-space: normal; font-size: 11px; color: #ffcf9a; max-width: 160px; }
+#closedOverlay { position: fixed; inset: 0; z-index: 85; background: rgba(10, 5, 2, 0.93); display: flex; align-items: center; justify-content: center; text-align: center; color: var(--cream); }
+#closedOverlay[hidden] { display: none; }
+#closedOverlay .lock-box { font-size: 22px; line-height: 1.8; }
+#closedOverlay b { color: var(--gold); }
+html.short #tBoard { max-height: 40vh; }
+html.short .t-board { font-size: 11px; }

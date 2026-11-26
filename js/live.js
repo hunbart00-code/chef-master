@@ -2,6 +2,7 @@
 import {
   cloudOn, cloudPresence, cloudWatchPresence, cloudVisitStart, cloudVisitUpdate, cloudVisitEnd, cloudWatchVisits,
   cloudWatchChat, cloudSendChat, cloudWatchAnnounce, cloudAnnounce, cloudClassControl, cloudTeacherCheck, cloudTeacherSetup, ONLINE_MS,
+  cloudWatchServer, cloudSetServer, cloudResetCode, cloudClassShops, cloudWatchClass,
 } from './cloud.js';
 import { registerChef, chefSheetOf } from './chef-maker.js';
 
@@ -27,12 +28,16 @@ let lastSend = 0;
 let unread = 0;
 let lastAnnId = null;
 
-export function initLive({ scene, toast }) {
-  getScene = scene; toastFn = toast;
+let hooks = {};
+let server = { open: true, msg: '' };
+let chatOff = false;
+
+export function initLive({ scene, toast, persist, logout }) {
+  getScene = scene; toastFn = toast; hooks = { persist, logout };
   bindChat();
   bindTeacher();
   // 교사 공지는 로그인 전에도 들음
-  const startAnn = () => { unsub.announce(); unsub.announce = cloudWatchAnnounce(showAnnounce); };
+  const startAnn = () => { unsub.announce(); unsub.announce = cloudWatchAnnounce(showAnnounce); cloudWatchServer(applyServer); };
   if (cloudOn()) startAnn(); else setTimeout(() => { if (cloudOn()) startAnn(); }, 2500);
 }
 
@@ -129,7 +134,10 @@ function setBadge(n) {
 
 function renderChat() {
   const list = $('#chatList'); if (!list) return;
-  $('#chatTitle').textContent = teacher ? `💬 ${chatBan}반 채팅 (선생님)` : `💬 ${me?.ban || ''}반 채팅`;
+  $('#chatTitle').textContent = teacher ? `💬 ${chatBan}반 채팅 (선생님)` : `💬 ${me?.ban || ''}반 채팅${chatOff ? ' (꺼짐)' : ''}`;
+  const off = chatOff && !teacher;
+  $('#chatInput').disabled = off; $('#chatSend').disabled = off;
+  $('#chatInput').placeholder = off ? '선생님이 채팅을 잠시 껐어요 🔇' : '친구에게 한마디 (60자)';
   if (!cloudOn()) { list.innerHTML = '<p class="chat-empty">학급 서버에 연결되어야 채팅할 수 있어요.</p>'; return; }
   const myId = teacher ? 'teacher' : me?.accountId;
   list.innerHTML = chatMsgs.length ? chatMsgs.map((m) => `<div class="chat-msg ${m.teacher ? 'teacher' : ''} ${m.from === myId ? 'mine' : ''}">
@@ -152,6 +160,7 @@ function bindChat() {
     if (!cloudOn()) { toastFn('학급 서버에 연결되어야 채팅할 수 있어요.'); return; }
     if (Date.now() - lastSend < 3000) { toastFn('조금만 천천히 보내요! (3초)'); return; }
     if (!teacher && !me) return;
+    if (chatOff && !teacher) { toastFn('선생님이 채팅을 잠시 껐어요 🔇'); return; }
     lastSend = Date.now();
     inp.value = '';
     try {
@@ -189,7 +198,8 @@ async function sha256(t) {
 
 function bindTeacher() {
   $('#btnTeacher').onclick = () => { $('#teacherLogin').hidden = false; $('#titleCard').hidden = true; $('#tPw').focus(); };
-  $('#tBack').onclick = () => { $('#teacherLogin').hidden = true; $('#titleCard').hidden = false; };
+  $('#tBack').onclick = () => { $('#teacherLogin').hidden = true; $('#titleCard').hidden = false; if (server.open === false) $('#closedOverlay').hidden = false; };
+  $('#closedTeacher').onclick = () => { $('#closedOverlay').hidden = true; $('#btnTeacher').click(); };
   $('#tLogin').onclick = async () => {
     const pw = $('#tPw').value.trim();
     if (pw.length < 4) { toastFn('비밀번호는 4글자 이상이에요.'); return; }
@@ -214,7 +224,7 @@ function bindTeacher() {
     catch (e) { toastFn('공지를 못 보냈어요. 비밀번호나 인터넷을 확인해 주세요.'); }
   };
   $('#tAnn').addEventListener('keydown', (e) => e.stopPropagation());
-  $('#tBan').onchange = (e) => { watchChat(Number(e.target.value)); renderClassRow(); };
+  $('#tBan').onchange = (e) => { watchChat(Number(e.target.value)); watchTeacherClass(); };
   $('#tPause').onclick = async () => {
     const ban = Number($('#tBan').value), cur = classState[ban]?.isPaused;
     try { await cloudClassControl(ban, { isPaused: !cur }, teacher.pw); classState[ban] = { ...classState[ban], isPaused: !cur }; renderClassRow(); toastFn(!cur ? `✋ ${ban}반 화면을 멈췄어요.` : `▶ ${ban}반 화면을 다시 풀었어요.`); }
@@ -226,17 +236,140 @@ function bindTeacher() {
     catch (err) { toastFn('바꾸지 못했어요.'); }
   };
   $('#tChat').onclick = () => { $('#chatBox').hidden = false; setBadge(0); renderChat(); };
-  $('#tOut').onclick = () => { teacher = null; unsub.chat(); $('#teacherDesk').hidden = true; $('#chatBox').hidden = true; $('#titleCard').hidden = false; };
+  bindTeacherAdmin();
+  $('#tOut').onclick = () => { teacher = null; tUnsubPresence(); tUnsubClass(); if (server.open === false) $('#closedOverlay').hidden = false; unsub.chat(); $('#teacherDesk').hidden = true; $('#chatBox').hidden = true; $('#titleCard').hidden = false; };
 }
 
 const classState = {};
 function renderClassRow() {
   const ban = Number($('#tBan').value);
   $('#tPause').textContent = classState[ban]?.isPaused ? `▶ ${ban}반 화면 풀기` : `✋ ${ban}반 화면 멈추기`;
+  $('#tChatOff').textContent = classState[ban]?.chatOff ? `💬 ${ban}반 채팅 켜기` : `🔇 ${ban}반 채팅 끄기`;
+}
+
+let tUnsubClass = () => {};
+function watchTeacherClass() {
+  const ban = Number($('#tBan').value);
+  tUnsubClass(); tUnsubClass = cloudWatchClass(ban, (d) => { classState[ban] = d; renderClassRow(); $('#tTerm').value = d.mathTerm || 'ALL'; });
+  renderClassRow();
 }
 
 function openTeacherDesk() {
   $('#teacherDesk').hidden = false;
+  $('#closedOverlay').hidden = true;
+  renderServerRow();
   watchChat(Number($('#tBan').value));
-  renderClassRow();
+  watchTeacherClass();
+}
+
+// ---------- 반 통제 (채팅 끄기) ----------
+export function liveClassControl(ctrl) {
+  const was = chatOff;
+  chatOff = !!ctrl.chatOff;
+  if (was !== chatOff && me) { toastFn(chatOff ? '🔇 선생님이 채팅을 껐어요.' : '💬 채팅이 다시 켜졌어요!'); renderChat(); }
+}
+
+// ---------- 서버 열기/닫기 ----------
+export const serverClosed = () => !teacher && server.open === false;
+function applyServer(sv) {
+  const wasOpen = server.open !== false;
+  server = { open: sv.open !== false, msg: sv.msg || '' };
+  if (teacher) renderServerRow();
+  const ov = $('#closedOverlay');
+  if (!server.open && !teacher) {
+    $('#closedMsg').textContent = server.msg || '오늘 영업은 여기까지! 가게는 모두 저장됐어요.';
+    ov.hidden = false;
+    if (wasOpen) { hooks.persist?.(); hooks.logout?.(); }
+  } else {
+    ov.hidden = true;
+    if (!wasOpen && server.open && !teacher) toastFn('🔓 게임 문이 다시 열렸어요! 로그인하세요.');
+  }
+}
+function renderServerRow() {
+  const b = $('#tServer');
+  b.textContent = server.open ? '🔒 서버 닫기 (모든 학생 게임 종료)' : '🔓 서버 열기';
+  b.classList.toggle('warn', server.open); b.classList.toggle('go', !server.open);
+  $('#tServerState').innerHTML = server.open ? '지금 <b class="ok">열림</b>' : `지금 <b class="no">닫힘</b>${server.msg ? ` · “${esc(server.msg)}”` : ''}`;
+}
+
+// ---------- 선생님: 학생 현황판 ----------
+let tPresence = {};
+let tUnsubPresence = () => {};
+let tShops = [];
+const pct = (c, n) => (n ? `${Math.round((c / n) * 100)}%` : '-');
+const $$ = (s) => [...document.querySelectorAll(s)];
+
+async function loadBoard() {
+  const ban = Number($('#tBoardBan').value);
+  tUnsubPresence(); tUnsubPresence = cloudWatchPresence(ban, (m) => { tPresence = m; renderBoard(); });
+  $('#tBoard').innerHTML = '<p class="muted small">불러오는 중…</p>';
+  try { tShops = (await cloudClassShops(ban)).sort((a, b) => a.no - b.no); } catch (e) { $('#tBoard').innerHTML = '<p class="small">학생 목록을 못 불러왔어요.</p>'; return; }
+  renderBoard();
+}
+
+function renderBoard() {
+  const MODE = { biz: '🔥영업', prep: '🧺준비', visit: '🚶방문' };
+  if (!tShops.length) { $('#tBoard').innerHTML = '<p class="muted small">아직 이 반에 가게를 만든 학생이 없어요.</p>'; return; }
+  const rows = tShops.map((s) => {
+    const p = tPresence[s.id], on = p && Date.now() - p.at < ONLINE_MS, q = s.quizStats || {};
+    return `<tr><td>${s.no}</td><td class="nm">${esc(s.name)}${s.codeReset ? ' <small class="no">코드 초기화됨</small>' : ''}</td>
+      <td>${on ? `<i class="online-dot"></i>${MODE[p.mode] || '접속'}` : '<span class="muted">-</span>'}</td>
+      <td>${s.day || 1}</td><td>${(s.money || 0).toLocaleString()}</td><td>★${(s.rating || 0).toFixed(1)}</td>
+      <td>${pct(q.mathC, q.mathN)} <small class="muted">(${q.mathN || 0})</small></td><td>${pct(q.engC, q.engN)} <small class="muted">(${q.engN || 0})</small></td>
+      <td class="weak">${(q.weak || []).map(esc).join(', ') || '-'}</td>
+      <td><button class="px-btn tiny" data-reset="${s.id}" data-name="${esc(s.name)}">코드 초기화</button></td></tr>`;
+  }).join('');
+  $('#tBoard').innerHTML = `<table class="t-board"><thead><tr><th>번</th><th>이름</th><th>접속</th><th>DAY</th><th>돈</th><th>별점</th><th>수학</th><th>영어</th><th>약한 단원</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function downloadCsv() {
+  const ban = $('#tBoardBan').value;
+  const head = ['반', '번호', '이름', 'DAY', '돈', '별점', '수학 정답률', '수학 푼 문제', '영어 정답률', '영어 푼 문제', '약한 단원', '마지막 저장'];
+  const lines = tShops.map((s) => {
+    const q = s.quizStats || {};
+    return [ban, s.no, s.name, s.day || 1, s.money || 0, (s.rating || 0).toFixed(1), pct(q.mathC, q.mathN), q.mathN || 0, pct(q.engC, q.engN), q.engN || 0,
+      (q.weak || []).join(' / '), s.updatedAt ? new Date(s.updatedAt).toLocaleString('ko-KR') : ''];
+  });
+  const csv = '﻿' + [head, ...lines].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `셰프마스터_${ban}반_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function bindTeacherAdmin() {
+  $$('#teacherDesk [data-ttab]').forEach((b) => {
+    b.onclick = () => {
+      $$('#teacherDesk [data-ttab]').forEach((x) => x.classList.toggle('active', x === b));
+      $$('#teacherDesk [data-tpane]').forEach((p) => { p.hidden = p.dataset.tpane !== b.dataset.ttab; });
+      if (b.dataset.ttab === 'board') loadBoard();
+    };
+  });
+  $('#tServer').onclick = async () => {
+    const open = !server.open;
+    if (!open && !window.confirm('서버를 닫으면 모든 반 학생의 게임이 저장된 뒤 종료돼요. 닫을까요?')) return;
+    try {
+      await cloudSetServer(open, $('#tServerMsg').value.trim().slice(0, 60), teacher.pw);
+      toastFn(open ? '🔓 서버를 열었어요.' : '🔒 서버를 닫았어요. 학생들 게임이 저장 후 종료돼요.');
+    } catch (e) { toastFn('바꾸지 못했어요. 비밀번호나 인터넷을 확인해 주세요.'); }
+  };
+  $('#tServerMsg').addEventListener('keydown', (e) => e.stopPropagation());
+  $('#tChatOff').onclick = async () => {
+    const ban = Number($('#tBan').value), cur = !!classState[ban]?.chatOff;
+    try {
+      await cloudClassControl(ban, { chatOff: !cur }, teacher.pw);
+      classState[ban] = { ...classState[ban], chatOff: !cur }; renderClassRow();
+      toastFn(!cur ? `🔇 ${ban}반 채팅을 껐어요.` : `💬 ${ban}반 채팅을 켰어요.`);
+    } catch (e) { toastFn('바꾸지 못했어요.'); }
+  };
+  $('#tBoardBan').onchange = loadBoard;
+  $('#tRefresh').onclick = loadBoard;
+  $('#tCsv').onclick = () => { if (!tShops.length) { toastFn('받을 학생 기록이 없어요.'); return; } downloadCsv(); };
+  $('#tBoard').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-reset]'); if (!b) return;
+    if (!window.confirm(`${b.dataset.name} 학생의 4자리 코드를 초기화할까요?\n학생이 다음에 입력하는 코드가 새 코드가 돼요.`)) return;
+    try { await cloudResetCode(b.dataset.reset, teacher.pw); toastFn(`${b.dataset.name} 학생 코드를 초기화했어요. 바로 새 코드로 로그인하게 해 주세요.`); loadBoard(); }
+    catch (err) { toastFn('초기화하지 못했어요.'); }
+  });
 }

@@ -161,3 +161,29 @@ export async function cloudTeacherSetup(pwHash) {
   if (!db) throw new Error('offline');
   return F.setDoc(F.doc(db, 'config', 'teacher'), { pwHash });
 }
+
+// ================= 선생님 관리: 서버 열기/닫기 · 코드 초기화 · 학생 현황 =================
+/** 서버 상태 구독 { open, msg } */
+export function cloudWatchServer(cb) {
+  if (!db) return () => {};
+  return F.onSnapshot(F.doc(db, 'config', 'server'), (snap) => cb(snap.exists() ? snap.data() : { open: true }), () => {});
+}
+export async function cloudSetServer(open, msg, teacherPw) {
+  const b = F.writeBatch(db), op = rid();
+  b.set(F.doc(db, 'auth', op), { pw: teacherPw });
+  b.set(F.doc(db, 'config', 'server'), { open, msg: msg || '', op, at: Date.now() });
+  return b.commit();
+}
+/** 학생 4자리 코드 초기화 → 학생이 다음에 입력하는 코드가 새 코드가 됨 */
+export async function cloudResetCode(id, teacherPw) {
+  const b = F.writeBatch(db), op = rid();
+  b.set(F.doc(db, 'auth', op), { pw: teacherPw });
+  b.set(F.doc(db, 'shops', id), { codeHash: null, op }, { merge: true });
+  return b.commit();
+}
+/** 선생님용: 반 가게 목록 (코드 해시 제외) */
+export async function cloudClassShops(ban) {
+  if (!db) return [];
+  const res = await F.getDocs(F.query(F.collection(db, 'shops'), F.where('ban', '==', Number(ban))));
+  return res.docs.map((d) => { const s = d.data(); const reset = s.codeHash === null; delete s.codeHash; return { ...s, id: d.id, codeReset: reset }; });
+}

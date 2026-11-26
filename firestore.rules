@@ -7,6 +7,10 @@ rules_version = '2';
 // - 공지·반 통제: 선생님만 (비밀번호의 SHA-256이 config/teacher 와 같아야 함, 비밀번호는 아무도 읽을 수 없음)
 service cloud.firestore {
   match /databases/{database}/documents {
+    function chatOpen(ban) {
+      return !exists(/databases/$(database)/documents/classes/$(ban))
+        || get(/databases/$(database)/documents/classes/$(ban)).data.get('chatOff', false) != true;
+    }
     function teacherOp(op) {
       return op is string
         && !exists(/databases/$(database)/documents/auth/$(op))
@@ -17,7 +21,10 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.resource.data.keys().hasAll(['name', 'ban', 'no', 'codeHash'])
         && id == string(request.resource.data.ban) + '-' + string(request.resource.data.no);
-      allow update: if resource.data.codeHash == request.resource.data.codeHash;
+      // 학생: 같은 코드로만 / 선생님이 코드를 초기화(null)했으면 학생이 새 코드로 한 번 등록 / 선생님 확인이 있으면 초기화 가능
+      allow update: if resource.data.codeHash == request.resource.data.codeHash
+        || (resource.data.codeHash == null && request.resource.data.codeHash is string)
+        || teacherOp(request.resource.data.get('op', null));
       allow delete: if false;
     }
     match /guestbooks/{gid} {
@@ -42,7 +49,7 @@ service cloud.firestore {
       allow create: if request.resource.data.text is string
         && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 60
         && request.resource.data.name is string && request.resource.data.name.size() <= 16
-        && (request.resource.data.teacher == false || teacherOp(request.resource.data.op));
+        && ((request.resource.data.teacher == false && chatOpen(ban)) || teacherOp(request.resource.data.get('op', null)));
       allow update, delete: if false;
     }
     match /announcements/{id} {
@@ -52,6 +59,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /classes/{ban} {
+      allow read: if true;
+      allow write: if teacherOp(request.resource.data.op);
+    }
+    // 서버 열기/닫기: 누구나 읽기, 선생님만 바꾸기
+    match /config/server {
       allow read: if true;
       allow write: if teacherOp(request.resource.data.op);
     }

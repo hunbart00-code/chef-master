@@ -238,6 +238,17 @@ export class QuizEngine {
     this.save();
   }
 
+  /** 선생님 현황판용 요약: 과목별 정답률, 푼 문제 수, 자주 틀리는 수학 단원 */
+  summary() {
+    const sum = { m: [0, 0], e: [0, 0] };
+    for (const [k, v] of Object.entries(this.mem.stats)) { const t = k.startsWith('M_') ? sum.m : sum.e; t[0] += v.c; t[1] += v.c + v.w; }
+    const unitAcc = {};
+    for (const [k, v] of Object.entries(this.mem.stats)) if (k.startsWith('M_')) { const u = k.slice(2); unitAcc[u] = { c: v.c, n: v.c + v.w }; }
+    const weak = Object.entries(unitAcc).filter(([, v]) => v.n >= 3).sort((a, b) => a[1].c / a[1].n - b[1].c / b[1].n).slice(0, 2)
+      .filter(([, v]) => v.c / v.n < 0.7).map(([u]) => UNITS[u]?.name || u);
+    return { mathN: sum.m[1], mathC: sum.m[0], engN: sum.e[1], engC: sum.e[0], weak, at: Date.now() };
+  }
+
   accuracy() {
     let c = 0, w = 0;
     for (const s of Object.values(this.mem.stats)) { c += s.c; w += s.w; }
