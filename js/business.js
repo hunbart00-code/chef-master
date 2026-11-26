@@ -1148,7 +1148,7 @@ export class Business {
       // 주문 대기 손님: 머리 위 음식을 누르라는 안내 (처음 며칠, 또는 오래 기다리는 손님)
       for (const c of this.customers) {
         if (c.state !== 'order') continue;
-        this.tag(g, X(c.x), Y(this.headY(c) - 30) + bob, '👆 클릭하세요!', '#2f7a2c');
+        this.tag(g, X(c.x), Y(this.headY(c) - 30) + bob, '👇 클릭하세요!', '#2f7a2c');
       }
       for (const c of this.customers) {
         if (c.state !== 'rowdy' || this.busy?.target === c) continue;
