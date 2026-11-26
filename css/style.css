@@ -571,3 +571,10 @@ html.short #tBoard { max-height: 40vh; }
 html.short .t-board { font-size: 11px; }
 
 .g-logo { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: #fff; color: #4285f4; font-weight: 900; align-items: center; justify-content: center; margin-right: 6px; font-family: Arial, sans-serif; }
+
+/* 크롬으로 열기 안내 */
+#chromeBanner { position: fixed; left: 50%; bottom: calc(8px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 99; width: min(560px, 94vw); display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #2a1208; color: var(--cream); border: 3px solid #ffd23f; border-radius: 6px; box-shadow: 0 0 0 3px #000, 0 8px 20px rgba(0,0,0,.6); font-size: 14px; }
+#chromeBanner span { flex: 1; line-height: 1.4; }
+#chromeBanner b { color: #ffd23f; }
+#cbOpen { flex: none; font: inherit; font-weight: 700; padding: 8px 12px; border: 0; border-radius: 4px; background: #4c9a3c; color: #fff; box-shadow: 0 3px 0 #24521f; }
+#cbClose { flex: none; font: inherit; background: none; border: 0; color: var(--cream-dim); font-size: 16px; padding: 4px; }
