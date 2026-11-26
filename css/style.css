@@ -1,3 +1,6 @@
+/* Galmuri11 (SIL OFL 1.1, fonts/OFL-Galmuri.md) — 오프라인에서도 동작하도록 직접 포함 */
+@font-face { font-family: 'Galmuri11'; src: url('../fonts/Galmuri11.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Galmuri11'; src: url('../fonts/Galmuri11-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }
 /* 셰프 마스터 — 카이로소프트풍 아기자기 픽셀 UI (기준 해상도 1366×768) */
 :root {
   --ink: #3b2416;
@@ -75,7 +78,7 @@ h4 { font-size: 13px; color: var(--ink-soft); }
 .btn.big { padding: 12px 22px; font-size: 18px; }
 .btn.huge { padding: 16px; font-size: 22px; width: 100%; }
 .btn.disabled, .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.icon-btn { cursor: pointer; background: var(--paper); border: 2px solid var(--ink); border-radius: 4px; width: 34px; height: 34px; font-size: 16px; padding: 0; }
+.icon-btn { font-weight: 700; cursor: pointer; background: var(--paper); border: 2px solid var(--ink); border-radius: 4px; width: 34px; height: 34px; font-size: 16px; padding: 0; }
 
 #app { min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -152,7 +155,7 @@ h4 { font-size: 13px; color: var(--ink-soft); }
 .ing-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
 .ing-row { display: flex; align-items: center; gap: 8px; background: #fff; border: 2px solid var(--ink); border-radius: 4px; padding: 8px; }
 .ing-icon { font-size: 28px; }
-.ing-name { flex: 1; display: flex; flex-direction: column; font-weight: 700; }
+.ing-name { flex: 1; display: flex; flex-direction: column; font-weight: 700; white-space: nowrap; }
 .ing-name small { font-weight: 400; font-size: 11px; color: var(--muted); }
 .ing-price { font-size: 12px; color: var(--ink-soft); }
 .ing-have { font-size: 12px; min-width: 52px; }
