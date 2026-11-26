@@ -843,16 +843,6 @@ export class Business {
     const b = this.burnerPos();
     const k = cooking ? ch.cook / COOK_TIME : 0;
     const burnt = cooking && ch.task.grade === 1 && k > 0.6;
-    // 불꽃
-    const fl = Math.floor(this.clock * 12) % 3;
-    for (let i = -4; i <= 4; i += 4) {
-      g.fillStyle = (i / 4 + fl) % 2 ? '#ffb020' : '#ff5a1f';
-      g.fillRect(Math.round(b.x + i + this.ox), Math.round(b.y - 1 - ((i / 4 + fl) % 2) + this.oy), 2, 2);
-    }
-    // 팬 + 음식 (보글보글 튀어오름)
-    g.fillStyle = '#1a0e08'; g.fillRect(Math.round(b.x - 9 + this.ox), Math.round(b.y - 3 + this.oy), 18, 3);
-    g.fillStyle = '#3a3a44'; g.fillRect(Math.round(b.x - 8 + this.ox), Math.round(b.y - 3 + this.oy), 16, 2);
-    g.fillRect(Math.round(b.x + 8 + this.ox), Math.round(b.y - 3 + this.oy), 6, 1);
     const hop = cooking ? -(Math.floor(this.clock * 10) % 2) : 0;
     this.spr(burnt ? 'dish_burnt' : DISH_PX[menuId], b.x, b.y - 2 + hop);
   }
