@@ -365,3 +365,5 @@ img.pximg { image-rendering: pixelated; vertical-align: middle; }
 .upgrade-card.expand { border-color: var(--gold); }
 .up-ico { font-size: 30px; }
 .danger-zone { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; opacity: 0.8; }
+
+#hudTR #btnLogout { min-height: 34px; font-size: 13px; }

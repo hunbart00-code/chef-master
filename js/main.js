@@ -32,6 +32,7 @@ let layoutSelected = null;
 let chefLook = 'chef_m';
 let pendingLogin = null;
 let visiting = null;
+let visitTasted = false;
 let rankKind = 'rich';
 const classControl = { isPaused: false, subjectRatio: null, maxBranchUnlocked: 4 };
 const engine = new QuizEngine();
@@ -117,6 +118,7 @@ function makeScene(st) {
       openQuiz: (o, cb) => quiz.open({ title: o.title, engBoost: o.engBoost, onDone: cb }),
       onEnd: endBusiness,
       onSlot,
+      onTasted: () => { visitTasted = true; if (visiting) { renderVisitBar(); toast('시식 완료! 응원 스티커를 남겨요 💌'); } },
     },
   });
   scene.locked = classControl.isPaused;
@@ -174,6 +176,34 @@ function enterAccount(id, f, isNew = false) {
   saveShop(s);
   startGame(s);
   if (!isNew) toast(`${f.name} 사장님, 어서 오세요! 🍜`);
+}
+
+// 로그아웃: 새로고침 없이 로그인 화면으로 (claude.ai 페이지 안에서는 새로고침이 막힐 수 있음)
+function logout() {
+  if (state) saveShop(state);
+  closePanel();
+  if (scene) { scene.edit = null; scene.hoverSlot = null; }
+  layoutSelected = null;
+  visiting = null;
+  state = null;
+  quiz.root.hidden = true;
+  $('#settleCard').hidden = true;
+  $('#hudTL').hidden = true;
+  $('#hudTR').hidden = true;
+  $('#bottomBar').hidden = true;
+  $('#feed').innerHTML = '';
+  $('#inpCode').value = '';
+  $('#loginForm').hidden = false;
+  $('#newShopStep').hidden = true;
+  pendingLogin = null;
+  $('#titleCard').hidden = false;
+  setSaveScope('');
+  engine.useScope('');
+  const preview = newShop('');
+  ensureForecast(preview);
+  makeScene(preview);
+  toast('로그아웃했어요. 가게는 저장돼 있어요! 👋');
+  $('#inpCode').focus();
 }
 
 function startGame(s) {
@@ -285,7 +315,8 @@ function visitFriend(id) {
   closePanel();
   visiting = f;
   makeScene({ ...f, forecast: { id: 'sunny', day: f.day }, fridge: f.fridge || { level: 0, capacity: 20, items: {} }, inventory: f.inventory || {}, today: { expense: 0 } });
-  scene.mode = 'visit';
+  visitTasted = false;
+  scene.startVisit({ name: state.name });
   showBar('visit');
   updateHud('방문');
   renderVisitBar();
@@ -298,7 +329,9 @@ function renderVisitBar() {
   const left = cheersLeftToday(state);
   const book = guestbookOf(f.id).slice(0, 3).map((e) => stickerById(e.sticker).icon).join(' ');
   $('#visitWho').innerHTML = `<span>🏠 <b>${f.name}</b>네 가게</span><small>★ ${(f.rating || 0).toFixed(1)} · DAY ${f.day}${book ? ` · 방명록 ${book}` : ''}</small>`;
-  $('#stickerRow').innerHTML = done
+  $('#stickerRow').innerHTML = !visitTasted
+    ? '<span class="small muted">🍽️ 손님으로 들어가 시식하는 중…</span>'
+    : done
     ? '<span class="done">💌 오늘 응원 완료!</span>'
     : left <= 0 ? '<span class="muted small">오늘 응원 3번을 다 썼어요</span>'
       : `<span class="small muted">시식 & 응원:</span>${STICKERS.map((st) => `<button class="px-btn tiny" data-sticker="${st.id}" title="${st.text}">${st.icon}</button>`).join('')}`;
@@ -658,8 +691,10 @@ async function init() {
     const r = sendCheer(state, visiting, b.dataset.sticker);
     if (!r.ok) { toast(r.reason); return; }
     const st = stickerById(b.dataset.sticker);
-    scene.float(scene.chef.x, scene.chef.y - 34, `${st.icon} ${st.text}`, '#ffd23f', null, true);
-    scene.sparkle(scene.chef.x, scene.chef.y - 20, 8);
+    const me = scene.visitor || scene.chef;
+    scene.float(me.x, me.y - 40, `${st.icon} ${st.text}`, '#ffd23f', null, true);
+    scene.sparkle(me.x, me.y - 24, 8);
+    setTimeout(() => scene?.visitorLeave(), 1200);
     sfx.play('perfect');
     toast(`${visiting.name}네 가게에 응원 스티커! 친구의 다음 영업 매출 +10% 📣`);
     renderVisitBar();
@@ -667,8 +702,7 @@ async function init() {
   $('#btnLogout').onclick = async () => {
     if (scene?.mode === 'business') { toast('영업 중에는 나갈 수 없어요.'); return; }
     if (!(await confirmBox('로그아웃할까요?<br><small>가게는 자동 저장돼요.</small>'))) return;
-    if (state) saveShop(state);
-    location.reload();
+    logout();
   };
   $('#btnHelp').onclick = () => { if (scene && !quiz.isOpen) scene.paused = true; $('#helpModal').hidden = false; };
   $('#helpModal [data-close]').onclick = () => {

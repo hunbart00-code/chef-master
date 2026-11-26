@@ -137,6 +137,36 @@ export class Business {
     return a;
   }
 
+  // ---------- 친구 가게 방문: 내가 손님으로 들어가 시식 ----------
+  startVisit(me) {
+    this.mode = 'visit';
+    this.edit = null;
+    const free = this.seats.filter((t) => !t.cust);
+    const menus = branchMenus(this.state);
+    const c = this.guestActor(false);
+    c.sheet = 'cust_kid';
+    const seat = free[0];
+    Object.assign(c, { visitor: true, visitorName: me.name, menuId: pick(menus), state: 'enter', patience: 1, maxPatience: 1 });
+    if (seat) {
+      c.table = seat; seat.cust = c;
+      c.path = this.entryPath(seat.seat);
+    } else {
+      // 테이블이 없으면 바 앞에 서서 시식
+      const spot = { x: Math.round((BAR.x0 + BAR.x1) / 2), y: HALL_TOP };
+      c.table = { seat: spot, serve: spot, trashPos: { x: spot.x, y: BAR.top + 6 }, base: HALL_TOP, cust: c };
+      c.path = this.entryPath(spot);
+    }
+    this.customers.push(c);
+    this.visitor = c;
+  }
+
+  visitorLeave() {
+    const c = this.visitor;
+    if (!c || c.state === 'leave') return;
+    if (this.seats.includes(c.table)) this.leave(c, false);
+    else { c.state = 'leave'; c.path = this.exitPath(c); }
+  }
+
   // ---------- 영업 시작 ----------
   startDay() {
     this.mode = 'business';
@@ -152,7 +182,7 @@ export class Business {
     this.pushHud(true);
   }
 
-  log(m) { this.hooks.log?.(m); }
+  log(m) { if (this.mode !== 'visit') this.hooks.log?.(m); }
   toast(m) { this.hooks.toast?.(m); }
 
   // ---------- 화면 크기: 정수배 확대 ----------
@@ -197,6 +227,13 @@ export class Business {
 
   tick(dt) {
     this.clock += dt;
+    if (this.mode === 'visit') {
+      for (const c of this.customers.slice()) this.updateCustomer(c, dt, false);
+      this.updateChef(dt);
+      this.updateServer(dt);
+      if (Math.random() < dt * 3) this.steam(false);
+      return;
+    }
     if (this.mode !== 'business') {
       for (const a of [this.chef, ...this.staffList]) { a.t += dt; this.move(a, dt); }
       if (Math.random() < dt * 3) this.steam(false);
@@ -328,6 +365,11 @@ export class Business {
         }
         break;
       case 'order':
+        if (c.visitor) {
+          c.state = 'cooked'; c.grade = 3;
+          this.chef.tasks.push({ type: 'cook', c, grade: 3 });
+          break;
+        }
         c.patience -= dt * (rowdyActive ? 2.5 : 1) * this.patienceMult;
         if (c.patience <= 0) {
           this.stats.lost++;
@@ -354,7 +396,15 @@ export class Business {
         break;
       case 'eat':
         c.timer -= dt;
-        if (c.timer <= 0) this.pay(c);
+        if (c.timer <= 0) {
+          if (c.visitor) {
+            c.state = 'ate'; c.table.dish = null;
+            this.float(c.x, c.y - 20, '잘 먹었습니다! 😋', '#ffd23f', null, true);
+            this.sparkle(c.x, c.y - 20, 6);
+            this.sfx?.play('perfect');
+            this.hooks.onTasted?.();
+          } else this.pay(c);
+        }
         break;
       case 'leave':
         if (this.move(c, dt)) this.customers.splice(this.customers.indexOf(c), 1);
@@ -737,7 +787,7 @@ export class Business {
     }
     for (const d of this.decos) add(d.y, () => this.spr(ITEM_PX[d.type], d.x, d.y));
     for (const c of this.customers) {
-      const seated = ['order', 'cooking', 'cooked', 'eat', 'rowdy'].includes(c.state);
+      const seated = ['order', 'cooking', 'cooked', 'eat', 'rowdy', 'ate'].includes(c.state);
       add(seated ? c.table.base + 1 : c.y, () => this.drawActor(c, seated));
     }
     add(this.chef.y, () => { this.drawActor(this.chef); if (this.chef.carry) this.carry(this.chef); if (this.chef.mode === 'sweeping') this.broom(this.chef); });
@@ -749,7 +799,7 @@ export class Business {
     this.drawParticles(dt);
     this.drawLight();
     if (this.edit) this.drawSlots();
-    if (this.mode === 'business') for (const c of this.customers) this.drawCustomerUI(c);
+    if (this.mode === 'business' || this.mode === 'visit') for (const c of this.customers) this.drawCustomerUI(c);
     this.drawBars();
     this.drawUI(dt);
   }
@@ -989,6 +1039,9 @@ export class Business {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     if (this.chef.tasks.length) this.tag(g, X(this.chef.x), Y(this.chef.y - 40), `할 일 ${this.chef.tasks.length}`, '#3d6fb0');
+    if (this.mode === 'visit') {
+      for (const c of this.customers) if (c.visitor && c.state !== 'leave') this.tag(g, X(c.x), Y(this.headY(c) - (['enter', 'leave'].includes(c.state) ? 6 : c.state === 'ate' ? 4 : 22)), `${c.visitorName} (나)`, '#2f7a2c');
+    }
     if (this.mode === 'business') {
       for (const c of this.customers) if (c.state === 'rowdy' && this.busy?.target === c) this.tag(g, X(c.x), Y(c.y - 50), '진정시키는 중…', '#5a3a22');
     }
