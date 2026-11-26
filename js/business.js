@@ -997,7 +997,10 @@ export class Business {
   carry(a) {
     const name = a.carry.grade === 1 ? 'dish_burnt' : DISH_PX[a.carry.c.menuId];
     const bob = a.moving ? -(Math.floor(a.t * 8) % 2) : 0;
-    this.spr(name, a.x, a.y - 22 + bob);
+    // 머리 위가 아니라 손(쟁반) 높이, 몸 앞쪽에 들고 감
+    const side = a.dir === 'left' ? -4 : a.dir === 'right' ? 4 : 0;
+    if (a.dir === 'back') return; // 뒤돌아 걸을 땐 몸에 가려 안 보임
+    this.spr(name, a.x + side, a.y - 9 + bob);
   }
 
   broom(a) {
@@ -1141,6 +1144,11 @@ export class Business {
         if (!t.trash) continue;
         if (this.cleaner) continue;
         if (!t.reserved) this.tag(g, X(t.trashPos.x), Y(t.trashPos.y - 22) + bob, '🧹 눌러서 청소!', '#c0392b');
+      }
+      // 주문 대기 손님: 머리 위 음식을 누르라는 안내 (처음 며칠, 또는 오래 기다리는 손님)
+      for (const c of this.customers) {
+        if (c.state !== 'order') continue;
+        this.tag(g, X(c.x), Y(this.headY(c) - 30) + bob, '👆 클릭하세요!', '#2f7a2c');
       }
       for (const c of this.customers) {
         if (c.state !== 'rowdy' || this.busy?.target === c) continue;
