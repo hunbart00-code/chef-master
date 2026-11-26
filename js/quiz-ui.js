@@ -32,11 +32,18 @@ export class QuizUI {
       tag: $('.quiz-tag'), prompt: $('.quiz-prompt'), choices: $('.quiz-choices'), spell: $('.quiz-spell'),
       slots: $('.slots'), tiles: $('.tiles'), clear: $('.q-clear'), feedback: $('.quiz-feedback'), result: $('.quiz-result'),
     };
-    this.el.clear.addEventListener('click', () => this.spellUndo());
+    this.el.clear.addEventListener('click', (e) => { if (this.fresh(e)) this.spellUndo(); });
+    // 폰 '유령 터치' 막기: 손님을 눌러 퀴즈가 열린 그 터치가 손을 뗄 때 보기 버튼을 눌러 버리는 문제
+    // → 문제가 화면에 나온 뒤에 퀴즈 창 안에서 시작된 터치만 인정
+    this.shownAt = 0; this.downAt = -1; this.downIn = false;
+    document.addEventListener('pointerdown', (e) => { this.downAt = performance.now(); this.downIn = this.root.contains(e.target); }, true);
     document.addEventListener('keydown', (e) => this.onKey(e));
   }
 
   get isOpen() { return !this.root.hidden; }
+
+  // 키보드(Enter)로 누른 건 detail 0 → 그대로 인정
+  fresh(e) { return !e || !e.detail || (this.downIn && this.downAt >= this.shownAt); }
 
   /**
    * @param {object} o { title, count=3, engBoost, resultHtml(correct,total), resultButton, onDone(correct,total) }
@@ -56,6 +63,7 @@ export class QuizUI {
     const ctx = this.getContext();
     this.q = this.engine.next({ day: ctx.day, term: ctx.term, subjectRatio: ctx.subjectRatio, engBoost: this.opt.engBoost || 0 });
     this.answered = false;
+    this.shownAt = performance.now();
     const q = this.q;
     this.renderDots();
     this.el.tag.innerHTML = `<span class="subj ${q.subject}">${q.subject === 'math' ? '수학' : '영어'}</span> ${q.label} <span class="lv lv${q.lv}">${q.levelName || ''}</span>`;
@@ -73,7 +81,7 @@ export class QuizUI {
         const b = document.createElement('button');
         b.className = 'choice';
         b.innerHTML = `<span class="num">${i + 1}</span><span class="ctext">${html}</span>`;
-        b.addEventListener('click', () => this.answer(i));
+        b.addEventListener('click', (e) => { if (this.fresh(e)) this.answer(i); });
         this.el.choices.appendChild(b);
       });
     } else {
@@ -85,7 +93,7 @@ export class QuizUI {
         b.className = q.joiner ? 'tile word' : 'tile';
         b.textContent = ch;
         b.dataset.i = i;
-        b.addEventListener('click', () => this.spellPick(i));
+        b.addEventListener('click', (e) => { if (this.fresh(e)) this.spellPick(i); });
         this.el.tiles.appendChild(b);
       });
       this.renderSlots();
