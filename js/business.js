@@ -5,12 +5,12 @@
 import {
   MENUS, ITEMS, GRADE, TIP_RATE, tablesOf, branchMenus, canCook, anyCookable,
   consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf, furnitureBuffs,
-} from './shop-engine.js?v=20261127014359';
-import { geometry, levelOf } from './shop-levels.js?v=20261127014359';
-import { px, roomFor, roomTinted, DISH_PX, ITEM_PX, hasSprite, walkFrame } from './px.js?v=20261127014359';
-import { chefSheetOf } from './chef-maker.js?v=20261127014359';
-import { eraOf, ERAS } from './data-eras.js?v=20261127014359';
-import { recordDex, ensureEra } from './era-engine.js?v=20261127014359';
+} from './shop-engine.js?v=20261127020605';
+import { geometry, levelOf } from './shop-levels.js?v=20261127020605';
+import { px, roomFor, roomTinted, DISH_PX, ITEM_PX, hasSprite, walkFrame } from './px.js?v=20261127020605';
+import { chefSheetOf } from './chef-maker.js?v=20261127020605';
+import { eraOf, ERAS } from './data-eras.js?v=20261127020605';
+import { recordDex, ensureEra } from './era-engine.js?v=20261127020605';
 
 export const DAY_LENGTH = 150;      // 실제 초 (2분 30초)
 const EAT_TIME = 4.0;
@@ -34,6 +34,22 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const OUT = '#1a0f0a';
 const ROWDY_TYPES = ['rowdy_loud', 'rowdy_picky', 'rowdy_sneak'];
+// 손님 한마디 (짧게!)  3: 완벽 · 2: 보통 · 1: 탄 요리
+const SAY_TIME = 2.6;
+const SAY = {
+  3: ['꿀맛!', '또 올게요!', '맛집 인정!', '엄지 척!', '최고예요!', '감동이에요!', '인생 맛집!'],
+  2: ['괜찮네요', '먹을 만해요', '배부르다~', '나쁘지 않네', '무난해요'],
+  1: ['탔잖아요…', '써요 ㅠㅠ', '이게 뭐야…', '다신 안 와!', '숯 맛이…', '으엑…'],
+  late: ['너무 늦어요!', '배고파 ㅠㅠ', '그냥 갈래요'],
+  rowdy: ['흥!', '두고 보자!', '별로야!'],
+};
+const ERA_SAY = {
+  stone: { 3: ['우가! 맛있다!', '우가우가!', '고기보다 맛있다!'], 2: ['우가?'], 1: ['우가… 쓰다', '불 맛 너무 셈'] },
+  samguk: { 3: ['천하일미로다!', '장수의 맛이군!'], 1: ['맛이 영 별로군', '탔구나!'] },
+  goryeo: { 3: ['훌륭하오!', '고향에 소문내겠소'], 1: ['어허, 탔구려', '이건 아니오'] },
+  joseon: { 3: ['맛이 일품이오!', '이 맛이 진짜로다'], 2: ['그럭저럭이오'], 1: ['어허, 탔구려!', '이게 무엇이냐!'] },
+  space: { 3: ['삐빅! 최고!', '지구 최고 맛!', '별 다섯 개!'], 2: ['삐빅 보통'], 1: ['삐빅… 오류', '탄소 맛이다'] },
+};
 const GUEST_TYPES = ['cust_office_m', 'cust_kid', 'cust_office_f'];
 
 export function slotCenter(gx, gy) {
@@ -595,7 +611,7 @@ export class Business {
         if (this.move(c, dt)) {
           c.face = c.table.flip ? -1 : 1;
           if (!c.guest && !c.visitor && recordDex(this.state, c.sheet)) {
-            this.float(c.x, c.y - 44, '📖 도감에 새 손님!', '#9fe8ff', null, true);
+            this.float(c.x, c.y - 66, '📖 도감에 새 손님!', '#9fe8ff', null, true);
             this.log('📖 처음 보는 손님! <b>손님 도감</b>에 등록됐어요.');
           }
           if (c.rowdy) {
@@ -614,7 +630,7 @@ export class Business {
         if (c.patience <= 0) {
           this.stats.lost++;
           consume(this.state, c.menuId, +1);
-          this.float(c.x, c.y - 30, '너무 늦어요!', '#ff8a7a');
+          this.say(c, 'late');
           if (c.michelin) {
             this.stats.michelin = 'lost'; this.stats.michelinRating = -0.15;
             this.float(c.x, c.y - 44, '🕵️ 미슐랭 심사위원이었어요…', '#ff8a7a', null, true);
@@ -631,6 +647,7 @@ export class Business {
         if (c.timer <= 0) {
           this.stats.rowdyIgnored++;
           this.log('💢 진상 손님이 소란을 피우고 떠났어요. (별점 하락)');
+          this.say(c, 'rowdy');
           this.leave(c, true);
         }
         break;
@@ -1039,6 +1056,7 @@ export class Business {
     this.sfx?.play('receipt');
     if (c.grade === 1) this.sfx?.play('bad');
     c.table.dish = null;
+    this.say(c, c.grade);
     this.leave(c, Math.random() < 0.8 * (this.cleaner ? this.cleaner.def.trashMult : 1));
   }
 
@@ -1447,7 +1465,7 @@ export class Business {
       // 주문 대기 손님: 머리 위 음식을 누르라는 안내 (처음 며칠, 또는 오래 기다리는 손님)
       for (const c of this.customers) {
         if (c.state !== 'order') continue;
-        this.tag(g, X(c.x), Y(this.headY(c) - 30) + bob, '👇 클릭하세요!', '#2f7a2c');
+        this.hintText(g, X(c.x), Y(this.headY(c) - 30) + bob, '👇 클릭하세요!', '#ffe066');
       }
       for (const c of this.customers) {
         if (c.state !== 'rowdy' || this.busy?.target === c) continue;
@@ -1455,6 +1473,15 @@ export class Business {
         this.tag(g, X(c.x), Y(this.headY(c) - 30) + bob, '😡 눌러서 진정!', '#8e24aa');
       }
       for (const c of this.customers) if (c.state === 'rowdy' && this.busy?.target === c) this.tag(g, X(c.x), Y(c.y - 50), '진정시키는 중…', '#5a3a22');
+    }
+    // 손님 한마디 (나갈 때)
+    for (const c of this.customers) {
+      if (!c.say) continue;
+      const age = this.clock - c.say.t;
+      if (age > SAY_TIME) { c.say = null; continue; }
+      g.globalAlpha = age > SAY_TIME - 0.4 ? Math.max(0, (SAY_TIME - age) / 0.4) : 1;
+      this.bubble(g, X(c.x), Y(this.headY(c) - 4), c.say.text, c.say.bad);
+      g.globalAlpha = 1;
     }
     for (const f of this.floats) {
       f.life += dt;
@@ -1474,6 +1501,45 @@ export class Business {
       g.globalAlpha = 1;
     }
     this.floats = this.floats.filter((f) => f.life < f.max);
+  }
+
+  // 상자 없이 테두리만 있는 도트 글씨 (안내 문구)
+  hintText(g, x, y, text, color) {
+    const size = Math.round(13 * this.dpr * Math.max(1, this.s / 3));
+    g.font = `bold ${size}px Galmuri11, sans-serif`;
+    const o = Math.max(1, Math.round(this.dpr * Math.max(1, this.s / 3)));
+    g.fillStyle = '#1a0f0a';
+    for (const [dx, dy] of [[-o, 0], [o, 0], [0, -o], [0, o], [-o, -o], [o, -o], [-o, o], [o, o], [0, o * 2], [o, o * 2], [-o, o * 2]]) g.fillText(text, x + dx, y + dy);
+    g.fillStyle = color; g.fillText(text, x, y);
+  }
+
+  // 손님 한마디: 작은 도트 말풍선 (모서리를 계단처럼 깎은 상자 + 꼬리)
+  bubble(g, cx, by, text, bad) {
+    const u = Math.max(2, Math.round(this.s * this.dpr * 0.75));      // 말풍선 픽셀 한 칸
+    const size = Math.round(11 * this.dpr * Math.max(1, this.s / 3.2));
+    g.font = `bold ${size}px Galmuri11, sans-serif`;
+    const tw = Math.ceil(g.measureText(text).width / u) * u;
+    const w = tw + u * 6, h = Math.ceil(size / u) * u + u * 4;
+    const x0 = Math.round((cx - w / 2) / u) * u, y0 = Math.round((by - h - u * 3) / u) * u;
+    const ink = '#2a160b', paper = bad ? '#f3e2d8' : '#fff6dc';
+    g.fillStyle = ink;
+    g.fillRect(x0 + u, y0, w - 2 * u, h); g.fillRect(x0, y0 + u, w, h - 2 * u);            // 테두리 (깎은 모서리)
+    g.fillStyle = paper;
+    g.fillRect(x0 + u, y0 + u, w - 2 * u, h - 2 * u);
+    // 꼬리 (계단 모양)
+    const tx = Math.round(cx / u) * u;
+    g.fillStyle = ink; g.fillRect(tx - u, y0 + h - u, u * 3, u); g.fillRect(tx - u, y0 + h, u * 2, u); g.fillRect(tx - u, y0 + h + u, u, u);
+    g.fillStyle = paper; g.fillRect(tx, y0 + h - u, u, u);
+    g.fillStyle = bad ? '#b8321f' : ink;
+    g.fillText(text, x0 + w / 2, y0 + h / 2 + u * 0.2);
+  }
+
+  /** 손님이 나갈 때 할 말 고르기 */
+  say(c, kind) {
+    const era = this.era?.id;
+    const own = ERA_SAY[era]?.[kind];
+    const list = own && Math.random() < 0.55 ? own : SAY[kind];
+    c.say = { text: pick(list), bad: kind === 1 || kind === 'late' || kind === 'rowdy', t: this.clock };
   }
 
   tag(g, x, y, text, bg) {
