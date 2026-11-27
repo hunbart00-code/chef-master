@@ -2,7 +2,7 @@
 // shops/{반-번호}      : 학생 가게 전체 (+ 이름, 코드 해시)
 // guestbooks/{자동ID}  : 칭찬 스티커 { to, from, sticker, at }
 // classes/{반}         : 교사 통제 { isPaused, subjectRatio, maxBranchUnlocked }
-import { firebaseConfig, isFirebaseEnabled } from './firebase-config.js?v=20261127001202';
+import { firebaseConfig, isFirebaseEnabled } from './firebase-config.js?v=20261127004038';
 
 const V = '10.12.2';
 let db = null;

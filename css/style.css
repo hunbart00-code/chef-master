@@ -620,7 +620,7 @@ html.portrait .cc-opts { gap: 3px; }
 html.portrait .cc-lb { width: 58px; }
 html.portrait .sw { width: 22px; height: 22px; }
 /* 채팅·퀴즈·결산 */
-html.portrait #chatBox { left: 4px; right: 4px; width: auto; top: calc(96px + env(safe-area-inset-top)); height: calc(100dvh - 96px - 140px); }
+html.portrait #chatBox { left: 4px; right: 4px; width: auto; top: calc(96px + env(safe-area-inset-top)); height: calc(100dvh - 96px - 180px); }
 html.portrait .quiz-box { width: 98vw; max-height: 96dvh; gap: 6px; border-width: 8px; border-image-width: 8px; }
 html.portrait .quiz-head { font-size: 15px; }
 html.portrait .dot { width: 24px; height: 24px; font-size: 11px; }
@@ -684,3 +684,62 @@ html.short .tray-item i.buff { max-width: 80px; font-size: 9px; }
 .tray-info { flex: none; width: 140px; }
 #trayInfo { flex: none; width: 130px; }
 html.short #trayInfo, html.portrait #trayInfo { width: 96px; font-size: 9px; }
+
+/* ================= 확장 · 시간여행 · 도감 · 사치품 ================= */
+.exp-steps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.exp-step { display: flex; flex-direction: column; padding: 4px 8px; border: 1px solid #6b4226; border-radius: 3px; background: rgba(0,0,0,.25); }
+.exp-step small { font-size: 11px; color: var(--cream-dim); }
+.exp-step.now { border-color: var(--gold); background: rgba(255, 210, 63, .12); }
+.exp-step.done { opacity: .7; }
+.exp-arrow { color: var(--cream-dim); font-size: 11px; }
+.era-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+.era-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 2px solid #6b4226; border-radius: 4px; background: rgba(0,0,0,.28); }
+.era-card.here { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255,210,63,.25) inset; }
+.era-card.locked { opacity: .85; }
+.era-top { display: flex; gap: 8px; align-items: flex-start; }
+.era-ico { font-size: 30px; line-height: 1; }
+.era-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.era-txt small { font-size: 11px; color: var(--cream-dim); line-height: 1.35; }
+.era-txt .era-mod { color: #9be38f; }
+.era-faces { display: flex; gap: 4px; align-items: flex-end; flex-wrap: wrap; min-height: 28px; }
+.era-face img { height: 28px; width: auto; }
+.era-face.locked img, .pximg.silhouette { filter: brightness(0) opacity(.55); }
+.era-face.vip { position: relative; }
+.era-act { display: flex; justify-content: flex-end; }
+.era-here { color: var(--gold); font-weight: 700; }
+.era-req { width: 100%; display: flex; flex-direction: column; gap: 3px; }
+.req { display: grid; grid-template-columns: 96px 1fr auto; gap: 6px; align-items: center; font-size: 11px; }
+.req small { color: var(--cream-dim); white-space: nowrap; }
+.req.ok { color: #9be38f; }
+.req-bar { height: 8px; background: #120b07; border: 1px solid #6b4226; border-radius: 2px; overflow: hidden; }
+.req-bar b { display: block; height: 100%; background: #6bd35f; }
+.dex-era { margin-bottom: 10px; }
+.dex-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.dex-head > span { color: var(--gold); font-weight: 700; }
+.dex-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+.dex-cell { position: relative; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; background: rgba(0,0,0,.3); border: 1px solid #4a3424; border-radius: 3px; }
+.dex-cell.met { border-color: #8a6a3a; }
+.dex-cell.vip.met { border-color: var(--gold); }
+.dex-cell img { height: 40px; width: auto; }
+.dex-cell small { font-size: 10px; text-align: center; line-height: 1.2; color: var(--cream-dim); }
+.dex-cell.met small { color: var(--cream); }
+.dex-cell i { position: absolute; top: 1px; right: 2px; font-style: normal; font-size: 11px; }
+.tray-item.lux { border-color: rgba(160, 112, 224, .6); background: rgba(160, 112, 224, .12); position: relative; }
+.tray-item .lux-tag { position: absolute; top: 1px; left: 3px; font-style: normal; font-size: 10px; }
+.tray-item.locked img { filter: brightness(0) opacity(.5); }
+.tray-item.locked i.buff { color: var(--cream-dim); }
+.bb-row .px-btn.new { animation: newGlow 1s steps(2) infinite; }
+.bb-row .px-btn.new::after { content: 'NEW'; position: absolute; transform: translate(4px, -14px); font-size: 9px; background: #e0533d; color: #fff; padding: 0 3px; border-radius: 2px; }
+@keyframes newGlow { 50% { filter: brightness(1.5) drop-shadow(0 0 4px #ffd23f); } }
+html.portrait .era-list { grid-template-columns: 1fr; }
+html.portrait .req { grid-template-columns: 80px 1fr; }
+html.portrait .req small { grid-column: 1 / -1; }
+/* 버튼 9개: 좁은 가로 화면은 5칸 2줄, 아주 좁은 세로 화면은 '여행'으로 줄임 */
+@media (max-width: 800px) {
+  html.short #bbPrep:not([hidden]) { display: grid; grid-template-columns: repeat(5, auto); justify-content: center; }
+  html.short #bbPrep #btnOpen { grid-column: span 2; }
+}
+@media (max-width: 400px) { html.portrait .lbl-x { display: none; } }
+#bbPrep .px-btn { min-width: max-content; }
+html.short #panel { top: calc(4px + env(safe-area-inset-top)); max-height: none; }
+html.portrait #bbPrep #btnOpen { grid-column: 1 / -1; }

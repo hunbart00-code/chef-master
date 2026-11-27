@@ -1,8 +1,8 @@
 // 가게 상태·경제·저장 엔진 (localStorage 단독 모드, 3차에서 Firestore 연동)
-import { INGREDIENTS, MENUS, BRANCHES, FORECASTS, menuCost } from './data-menus.js?v=20261127001202';
-import { ITEMS, FRIDGE_LEVELS, DECO_BONUS_CAP, BUFF_CAP } from './data-interior.js?v=20261127001202';
-import { SHOP_LEVELS, gridOf } from './shop-levels.js?v=20261127001202';
-import { staffTier } from './data-staff.js?v=20261127001202';
+import { INGREDIENTS, MENUS, BRANCHES, FORECASTS, menuCost } from './data-menus.js?v=20261127004038';
+import { ITEMS, FRIDGE_LEVELS, DECO_BONUS_CAP, BUFF_CAP } from './data-interior.js?v=20261127004038';
+import { SHOP_LEVELS, gridOf } from './shop-levels.js?v=20261127004038';
+import { staffTier } from './data-staff.js?v=20261127004038';
 
 export const SAVE_KEY = 'chefmaster_shop_v1';
 export const SETTINGS_KEY = 'chefmaster_settings_v1';
@@ -30,6 +30,10 @@ export function newShop(name = '') {
     totalServed: 0,
     fridge: { level: 0, capacity: FRIDGE_LEVELS[0].capacity, items: { tteok: 3, fishcake: 4, rice: 2, seaweed: 2, veggie: 3, noodle: 2, egg: 2 } },
     shopLevel: 0,       // 가게 확장 단계 (0: 작은 분식집)
+    era: 'modern',      // 시간여행: 지금 장사하는 곳
+    erasUnlocked: ['modern'],
+    dex: {},            // 손님 도감 { 시트: 만난 횟수 }
+    dexClaimed: {},
     layout: [
       { type: 'table_wood', x: 1, y: 0 },   // 처음엔 테이블 하나
     ],
@@ -236,6 +240,7 @@ export const tablesOf = (state) => state.layout.filter((it) => ITEMS[it.type]?.k
 export function buyItem(state, type) {
   const it = ITEMS[type];
   if (!it || state.money < it.price) return false;
+  if (it.era && !(state.erasUnlocked || []).includes(it.era)) return false;   // 그 시대에 가 봐야 살 수 있음
   state.money -= it.price;
   state.today.expense += it.price;
   state.inventory[type] = (state.inventory[type] || 0) + 1;
@@ -260,7 +265,7 @@ export function pickupItem(state, x, y) {
 
 // 놓인 가구마다 버프가 쌓임 (종류별 최대치 있음)
 export function furnitureBuffs(state) {
-  const b = { patience: 0, tip: 0, visit: 0, seats: 0 };
+  const b = { patience: 0, tip: 0, visit: 0, sales: 0, seats: 0 };
   for (const it of state.layout || []) {
     const def = ITEMS[it.type];
     if (!def) continue;
@@ -277,6 +282,7 @@ export function buffSummary(state) {
   if (b.patience) out.push(`인내심 +${Math.round(b.patience * 100)}%`);
   if (b.tip) out.push(`팁 +${Math.round(b.tip * 100)}%`);
   if (b.visit) out.push(`방문 +${Math.round(b.visit * 100)}%`);
+  if (b.sales) out.push(`매출 +${Math.round(b.sales * 100)}%`);
   out.push(`별점 +${decoBonus(state).toFixed(2)}`);
   return out.join(' · ');
 }

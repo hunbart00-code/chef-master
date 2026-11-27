@@ -5,10 +5,12 @@
 import {
   MENUS, ITEMS, GRADE, TIP_RATE, tablesOf, branchMenus, canCook, anyCookable,
   consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf, furnitureBuffs,
-} from './shop-engine.js?v=20261127001202';
-import { geometry, levelOf } from './shop-levels.js?v=20261127001202';
-import { px, roomFor, DISH_PX, ITEM_PX, hasSprite, walkFrame } from './px.js?v=20261127001202';
-import { chefSheetOf } from './chef-maker.js?v=20261127001202';
+} from './shop-engine.js?v=20261127004038';
+import { geometry, levelOf } from './shop-levels.js?v=20261127004038';
+import { px, roomFor, roomTinted, DISH_PX, ITEM_PX, hasSprite, walkFrame } from './px.js?v=20261127004038';
+import { chefSheetOf } from './chef-maker.js?v=20261127004038';
+import { eraOf, ERAS } from './data-eras.js?v=20261127004038';
+import { recordDex, ensureEra } from './era-engine.js?v=20261127004038';
 
 export const DAY_LENGTH = 150;      // 실제 초 (2분 30초)
 const EAT_TIME = 4.0;
@@ -47,6 +49,8 @@ export class Business {
   constructor(o) {
     Object.assign(this, o);
     this.mode = 'prep';
+    ensureEra(this.state);
+    this.era = eraOf(this.state);
     this.forecast = currentForecast(this.state);
     this.stats = newDayStats();
     this.time = 0;
@@ -81,6 +85,8 @@ export class Business {
 
   // 가구·직원 배치가 바뀌면 다시 구성
   rebuild() {
+    ensureEra(this.state);
+    this.era = eraOf(this.state);
     this.level = levelOf(this.state);
     applyGeometry(this.level);
     this.forecast = currentForecast(this.state);
@@ -140,7 +146,7 @@ export class Business {
   guestActor(rowdy) {
     const a = { x: DOOR.x + rand(-3, 3), y: RH + 18, path: [], speed: rand(52, 64), t: Math.random() * 10, dir: 'back', face: 1 };
     a.kind = 'single';
-    a.sheet = pick(rowdy ? ROWDY_TYPES : GUEST_TYPES);
+    a.sheet = pick(rowdy ? (this.era?.rowdy || ROWDY_TYPES) : (this.era?.guests || GUEST_TYPES));
     return a;
   }
 
@@ -265,6 +271,34 @@ export class Business {
     this.sfx?.play('clean');
   }
 
+  // ---------- 장소 장식 (벽 장식 + 바닥 장식) ----------
+  eraSpots() {
+    if (this._eraSpots && this._eraSpots.level === this.level) return this._eraSpots.xs;
+    const busy = [...LAMPS.map((x) => [x, 14]), [CHALK_X, 28], ...WALL.map((w) => [w.x, 18]), [POS_X, 0]];
+    const xs = [];
+    for (let x = 30; x <= RW - 30; x += 2) {
+      if (busy.some(([bx, r]) => Math.abs(x - bx) < r + 10)) continue;
+      if (xs.some((o) => Math.abs(o - x) < 30)) continue;
+      xs.push(x);
+    }
+    this._eraSpots = { level: this.level, xs };
+    return xs;
+  }
+  drawEraDecor() {
+    const e = this.era;
+    if (!e) return;
+    const xs = this.eraSpots();
+    // 벽 장식은 왼쪽 끝·오른쪽 끝·가운데 순서로 고르게
+    const order = [xs[xs.length - 1], xs[0], xs[Math.floor(xs.length / 2)]].filter((x) => x !== undefined);
+    e.wall.forEach((name, i) => { if (order[i] !== undefined) this.spr(name, order[i], 44); });
+  }
+  drawEraFloor(add) {
+    const e = this.era;
+    if (!e?.floor) return;
+    const x = RW - 32, y = RH - 22;
+    add(y, () => this.spr(e.floor, x, y, e.floor === 'deco_bonfire' && Math.floor(this.clock * 5) % 2 === 1));
+  }
+
   // ---------- 영업 시작 ----------
   startDay() {
     this.mode = 'business';
@@ -299,7 +333,7 @@ export class Business {
     // 세로 화면(폰 세로): 위 HUD와 아래 버튼 칸 사이 빈 공간에 가게를 맞춤
     const portrait = W < Hh && W <= 1024;
     document.documentElement.classList.toggle('portrait', portrait);
-    const TOP = portrait ? 96 : 0, BOT = portrait ? 126 : 0;
+    const TOP = portrait ? 96 : 0, BOT = portrait ? 168 : 0;
     const availH = portrait ? Math.max(120, Hh - TOP - BOT) : Hh;
     // 가로 화면: 하단 바는 방 아래쪽 돌벽 위에 겹쳐도 되므로 방 높이 기준으로 맞춤
     const fit = Math.min(W / RW, availH / RH);
@@ -482,13 +516,18 @@ export class Business {
       consume(this.state, menuId);
     }
     const seat = pick(free);
-    const patience = BASE_PATIENCE * (this.forecast.patienceMult || 1);
+    let patience = BASE_PATIENCE * (this.forecast.patienceMult || 1) * (this.era.patience || 1);
+    // 👑 VIP: 장소마다 하루 한 명까지, 팁을 아주 많이 줌
+    const vip = !rowdy && this.era.vip && !this.vipCame && this.state.day >= 2 && Math.random() < 0.07;
+    if (vip) { this.vipCame = true; patience *= 1.4; }
     // 미슐랭 심사위원: 겉모습은 일반 손님과 똑같음 (3일차부터, 별점이 높을수록 자주, 하루 1명)
     const michelin = !rowdy && this.state.day >= 3 && !this.michelinCame
       && Math.random() < 0.05 + Math.max(0, this.state.rating - 3) * 0.06;
     if (michelin) this.michelinCame = true;
     const c = this.guestActor(rowdy);
-    Object.assign(c, { table: seat, menuId, rowdy, michelin, state: 'enter', patience, maxPatience: patience });
+    if (vip) c.sheet = this.era.vip;
+    Object.assign(c, { table: seat, menuId, rowdy, michelin, vip, state: 'enter', patience, maxPatience: patience });
+    if (vip) { this.log(`👑 <b>VIP 손님</b>이 왔어요! 완벽하게 대접하면 큰 보너스!`); this.sfx?.play('bell'); }
     c.path = this.entryPath(seat.seat);
     seat.cust = c;
     this.customers.push(c);
@@ -502,6 +541,10 @@ export class Business {
       case 'enter':
         if (this.move(c, dt)) {
           c.face = c.table.flip ? -1 : 1;
+          if (!c.guest && !c.visitor && recordDex(this.state, c.sheet)) {
+            this.float(c.x, c.y - 44, '📖 도감에 새 손님!', '#9fe8ff', null, true);
+            this.log('📖 처음 보는 손님! <b>손님 도감</b>에 등록됐어요.');
+          }
           if (c.rowdy) {
             c.state = 'rowdy'; c.timer = ROWDY_TIME;
             this.log('😡 진상 손님 등장! 클릭해서 진정시켜요.');
@@ -901,7 +944,7 @@ export class Business {
 
   pay(c) {
     const base = menuPrice(this.state, c.menuId);
-    const price = Math.round(base * GRADE[c.grade].mult * (1 + (this.promo || 0)) / 10) * 10;
+    const price = Math.round(base * GRADE[c.grade].mult * (1 + (this.promo || 0)) * (this.era.priceMult || 1) * (1 + (this.buffs.sales || 0)) / 10) * 10;
     const tipBonus = 1 + (this.server ? this.server.def.tipBonus : 0) + this.buffs.tip;
     const tip = c.grade === 3 ? Math.round(base * TIP_RATE * (this.forecast.tipMult || 1) * tipBonus / 10) * 10 : 0;
     this.state.money += price + tip;
@@ -911,10 +954,22 @@ export class Business {
     if (tip) this.float(c.x, c.y - 26, `팁 +${won(tip)}`, '#ff9ac8', 'heart', false, 0.25);
     if (c.grade >= 2) for (let i = 0; i < (c.grade === 3 ? 3 : 1); i++) this.particles.push({ kind: 'icon', sprite: c.grade === 3 && i ? 'star' : 'heart', x: c.x + rand(-8, 8), y: c.y - 22, vx: rand(-3, 3), vy: -rand(14, 22), life: -i * 0.15, max: 1.3 });
     if (c.michelin) this.revealMichelin(c, tip);
+    if (c.vip) this.vipBonus(c);
     this.sfx?.play('receipt');
     if (c.grade === 1) this.sfx?.play('bad');
     c.table.dish = null;
     this.leave(c, Math.random() < 0.8 * (this.cleaner ? this.cleaner.def.trashMult : 1));
+  }
+
+  // 👑 VIP 보너스: 장소가 멀수록 큼
+  vipBonus(c) {
+    const k = Math.max(1, ERAS.indexOf(this.era));
+    const bonus = c.grade === 3 ? 15000 * k : c.grade === 2 ? 4000 * k : 0;
+    if (bonus) { this.state.money += bonus; this.stats.bonus += bonus; }
+    this.float(c.x, c.y - 50, c.grade === 3 ? '👑 VIP 대감동!' : c.grade === 2 ? '👑 VIP 만족' : '👑 VIP 실망…', c.grade === 3 ? '#8cff86' : c.grade === 2 ? '#ffd23f' : '#ff8a7a', null, true, 0.4);
+    if (bonus) this.float(c.x, c.y - 60, `VIP 보너스 +${won(bonus)}`, '#8cff86', 'coin', true, 0.9);
+    if (c.grade === 3) { this.sparkle(c.x, c.y - 20, 14); this.sfx?.play('perfect'); }
+    this.log(c.grade === 3 ? `👑 VIP 손님 대감동! 보너스 ${won(bonus)}` : c.grade === 2 ? `👑 VIP 손님 만족. 보너스 ${won(bonus)}` : '👑 VIP 손님이 실망하고 떠났어요…');
   }
 
   // 결제 순간 정체 공개
@@ -981,13 +1036,14 @@ export class Business {
     const g = this.px;
     g.fillStyle = '#0b0705';
     g.fillRect(0, 0, this.vw, this.vh);
-    const R = roomFor(this.level);
+    const R = roomTinted(this.level, this.era?.tint);
     if (R) g.drawImage(R, this.ox, this.oy);
 
     // 주방 타일 바닥 + 벽 장식
     g.drawImage(this.kitchenTiles(), KITCHEN.x0 + this.ox, KITCHEN.y0 + this.oy);
     this.spr('chalkboard', CHALK_X, 44);
     for (const lx of LAMPS) this.spr('lantern', lx, 34);
+    this.drawEraDecor();
 
     const items = [];
     const add = (y, fn) => items.push({ y, fn });
@@ -1005,6 +1061,7 @@ export class Business {
       if (s.trash) add(s.base + 0.6, () => this.drawTrash(s));
     }
     for (const d of this.decos) add(d.y, () => this.spr(ITEM_PX[d.type], d.x, d.y));
+    this.drawEraFloor(add);
     for (const c of this.customers) {
       const seated = ['order', 'cooking', 'cooked', 'eat', 'rowdy', 'ate'].includes(c.state);
       add(seated ? c.table.base + 1 : c.y, () => this.drawActor(c, seated));
@@ -1286,6 +1343,7 @@ export class Business {
     if (this.mode === 'visit') {
       for (const c of this.customers) if (c.visitor && c.state !== 'leave') this.tag(g, X(c.x), Y(this.headY(c) - (['enter', 'leave'].includes(c.state) ? 6 : c.state === 'ate' ? 4 : 22)), `${c.visitorName} (나)`, '#2f7a2c');
     }
+    for (const c of this.customers) if (c.vip && !['leave', 'enter'].includes(c.state)) this.tag(g, X(c.x), Y(this.headY(c) - 30), '👑 VIP', '#8a5a12');
     for (const c of this.customers) if (c.guest && c.state !== 'leave') this.tag(g, X(c.x), Y(this.headY(c) - (c.state === 'ate' ? 4 : 6)), `${c.visitorName} (친구)`, '#2f5f9a');
     if (this.mode === 'business') {
       const bob = Math.floor(this.clock * 3) % 2 ? -2 * this.dpr : 0;

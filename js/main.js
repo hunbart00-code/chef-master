@@ -8,21 +8,24 @@ import {
   INGREDIENTS, MENUS, ITEMS, FRIDGE_LEVELS, RESCUE_BASE, RESCUE_PER_CORRECT, won,
   hireStaff, fireStaff, staffOf, totalWages, sellIngredient, clearFridge, missingHint, setSaveScope,
   expandShop, nextShopLevel, buffSummary,
-} from './shop-engine.js?v=20261127001202';
-import { SHOP_LEVELS, gridOf } from './shop-levels.js?v=20261127001202';
-import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js?v=20261127001202';
-import { liveClassControl, serverClosed, initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js?v=20261127001202';
-import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js?v=20261127001202';
-import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js?v=20261127001202';
-import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js?v=20261127001202';
-import { QuizEngine } from './quiz-engine.js?v=20261127001202';
-import { QuizUI } from './quiz-ui.js?v=20261127001202';
-import { Business } from './business.js?v=20261127001202';
-import { sfx } from './sfx.js?v=20261127001202';
-import { loadSprites, spriteImg } from './sprites.js?v=20261127001202';
-import { ING_SPRITE } from './sprite-atlas.js?v=20261127001202';
-import { loadPx, pxImg, DISH_PX, ITEM_PX } from './px.js?v=20261127001202';
-import { CHEF_PARTS, CHEF_PART_LABEL, defaultChefStyle, randomChefStyle, registerChef, chefSheetOf } from './chef-maker.js?v=20261127001202';
+} from './shop-engine.js?v=20261127004038';
+import { SHOP_LEVELS, gridOf } from './shop-levels.js?v=20261127004038';
+import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js?v=20261127004038';
+import { liveClassControl, serverClosed, initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js?v=20261127004038';
+import { ERAS, eraOf, eraById, dexListOf, dexReward, MODERN_NAMES } from './data-eras.js?v=20261127004038';
+import { ensureEra, isUnlocked, eraReq, checkUnlocks, travel, dexProgress, claimDex } from './era-engine.js?v=20261127004038';
+import { registerEraArt, ERA_PEOPLE } from './era-art.js?v=20261127004038';
+import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js?v=20261127004038';
+import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js?v=20261127004038';
+import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js?v=20261127004038';
+import { QuizEngine } from './quiz-engine.js?v=20261127004038';
+import { QuizUI } from './quiz-ui.js?v=20261127004038';
+import { Business } from './business.js?v=20261127004038';
+import { sfx } from './sfx.js?v=20261127004038';
+import { loadSprites, spriteImg } from './sprites.js?v=20261127004038';
+import { ING_SPRITE } from './sprite-atlas.js?v=20261127004038';
+import { loadPx, pxImg, DISH_PX, ITEM_PX } from './px.js?v=20261127004038';
+import { CHEF_PARTS, CHEF_PART_LABEL, defaultChefStyle, randomChefStyle, registerChef, chefSheetOf } from './chef-maker.js?v=20261127004038';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -98,7 +101,8 @@ function updateHud(clock) {
   $('#hudPerfect').textContent = state.perfectCookCount;
   const f = currentForecast(state);
   const promo = state.promo ? `<small class="promo">📣 친구 응원 홍보 효과 · 오늘 매출 +${Math.round(state.promo * 100)}%</small>` : '';
-  $('#forecastChip').innerHTML = `<span class="fc-ico">${f.icon}</span><span><b>${f.name}</b><small>${f.desc}</small>${promo}</span>`;
+  const era = eraOf(state);
+  $('#forecastChip').innerHTML = `<span class="fc-ico">${f.icon}</span><span><b>${era.id !== 'modern' ? `${era.icon} ${era.short} · ` : ''}${f.name}</b><small>${f.desc}</small>${promo}</span>`;
 }
 
 let myCodeHash = null;
@@ -250,6 +254,7 @@ function logout() {
 
 function startGame(s) {
   state = s;
+  ensureEra(state);
   $('#titleCard').hidden = true;
   $('#hudTL').hidden = false;
   $('#hudTR').hidden = false;
@@ -279,6 +284,7 @@ function enterPrep() {
   showBar('prep');
   updateHud('준비');
   refreshPrep();
+  announceUnlocks();
 }
 
 function showBar(which) {
@@ -295,7 +301,7 @@ function refreshPrep() {
 }
 
 // ---------- 팝업 패널 ----------
-const PANEL_TITLES = { chef: '🎨 셰프 꾸미기', ing: '🛒 식재료 구매', staff: '👥 종업원 고용', kitchen: '🏗️ 가게 확장 · 주방 설비', friends: '🏘️ 친구 가게', rank: '🏆 학급 랭킹' };
+const PANEL_TITLES = { chef: '🎨 셰프 꾸미기', ing: '🛒 식재료 구매', staff: '👥 종업원 고용', kitchen: '🧊 주방 설비', expand: '🏗️ 가게 확장', era: '🌏 시간여행', friends: '🏘️ 친구 가게', rank: '🏆 학급 랭킹' };
 
 function openPanel(kind) {
   if (kind === 'layout') { closePanel(); startEdit(); return; }
@@ -305,6 +311,7 @@ function openPanel(kind) {
   $('#panel').hidden = false;
   $('#panel').style.bottom = `${$('#bottomBar').offsetHeight + 14}px`;
   $('#panelTitle').textContent = PANEL_TITLES[kind];
+  if (kind === 'era') document.querySelector('[data-open="era"]')?.classList.remove('new');
   renderPanel();
   // 서버 모드: 친구·랭킹은 열 때마다 반 목록을 새로 받아 다시 그림
   if (cloudOn() && (kind === 'friends' || kind === 'rank')) {
@@ -324,6 +331,8 @@ function renderPanel() {
   if (panelKind === 'ing') body.innerHTML = ingredientsHtml();
   if (panelKind === 'staff') body.innerHTML = staffHtml();
   if (panelKind === 'kitchen') body.innerHTML = kitchenHtml();
+  if (panelKind === 'expand') body.innerHTML = expandHtml();
+  if (panelKind === 'era') body.innerHTML = eraHtml();
   if (panelKind === 'chef') {
     body.innerHTML = '<div class="chef-custom" id="chefCustomEdit"></div><div class="row-end"><button class="px-btn small" data-chef-cancel>취소</button><button class="px-btn small go" data-chef-save>저장하기</button></div>';
     renderCustomizer($('#chefCustomEdit'), editStyle);
@@ -501,25 +510,86 @@ function staffHtml() {
   return html;
 }
 
-function kitchenHtml() {
-  const lv = state.fridge.level;
-  const next = FRIDGE_LEVELS[lv + 1];
+function expandHtml() {
   const cur = SHOP_LEVELS[state.shopLevel ?? 0];
   const nx = nextShopLevel(state);
   const g = gridOf(state);
-  const expand = `<div class="upgrade-card expand">
+  const steps = SHOP_LEVELS.map((L, i) => {
+    const now = i === (state.shopLevel ?? 0), done = i < (state.shopLevel ?? 0);
+    return `<div class="exp-step ${now ? 'now' : done ? 'done' : ''}"><b>${now ? '📍 ' : done ? '✅ ' : ''}${L.name}</b><small>자리 ${L.cols * L.rows}칸${L.price ? ` · ${won(L.price)}` : ''}</small></div>`;
+  }).join('<span class="exp-arrow">▶</span>');
+  return `<div class="exp-steps">${steps}</div>
+    <div class="upgrade-card expand">
       <span class="up-ico">🏗️</span>
-      <div><b>${cur.name}</b> <span class="muted small">(테이블 자리 ${g.cols * g.rows}칸)</span>
-        <p>${nx ? `다음: <b>${nx.name}</b> — 가게가 넓어지고 테이블 자리가 ${nx.cols * nx.rows}칸으로 늘어나요.` : '가장 넓은 가게예요! (2호점 확장은 다음 업데이트)'}</p></div>
+      <div><b>${cur.name}</b> <span class="muted small">(가구 자리 ${g.cols * g.rows}칸)</span>
+        <p>${nx ? `다음: <b>${nx.name}</b> — 가게가 넓어지고 자리가 ${nx.cols * nx.rows}칸으로 늘어나요.` : '가장 넓은 가게예요!'}</p></div>
       ${nx ? `<button class="px-btn ${state.money >= nx.price ? 'go' : 'off'}" data-expand>확장 ${won(nx.price)}</button>` : '<span class="muted">MAX</span>'}
-    </div>`;
-  return expand + `<div class="upgrade-card">${pxImg('fridge', 2)}
+    </div>
+    <p class="small muted">💡 자리에는 테이블도, 💎 사치품도 놓을 수 있어요. 자리가 많을수록 손님도 버프도 늘어나요! (🪑 배치에서 놓기)</p>`;
+}
+
+function kitchenHtml() {
+  const lv = state.fridge.level;
+  const next = FRIDGE_LEVELS[lv + 1];
+  return `<div class="upgrade-card">${pxImg('fridge', 2)}
       <div><b>냉장고 Lv.${lv + 1}</b><p>보관 ${state.fridge.capacity}칸${next ? ` → 다음 ${next.capacity}칸` : ' (최대)'}</p></div>
       ${next ? `<button class="px-btn go" data-fridge>업그레이드 ${won(next.price)}</button>` : '<span class="muted">MAX</span>'}
     </div>
     <p class="small muted">재료는 상하지 않아요. 냉장고가 클수록 하루에 더 많은 손님을 받을 수 있어요.</p>
     <div class="danger-zone"><span class="small muted">가게를 DAY 1부터 다시 시작하고 싶다면</span>
       <button class="px-btn tiny" data-reset>처음부터 다시</button></div>`;
+}
+
+// ---------- 시간여행 ----------
+let eraTab = 'places';
+const personName = (sheet) => (sheet.startsWith('era_') ? ERA_PEOPLE[sheet.slice(4)]?.name : MODERN_NAMES[sheet]) || '손님';
+function eraHtml() {
+  ensureEra(state);
+  const tabs = `<div class="rank-tabs"><button class="px-btn small ${eraTab === 'places' ? 'active' : ''}" data-eratab="places">🗺️ 장소</button><button class="px-btn small ${eraTab === 'dex' ? 'active' : ''}" data-eratab="dex">📖 손님 도감</button></div>`;
+  if (eraTab === 'dex') return tabs + dexHtml();
+  const cards = ERAS.map((e, i) => {
+    const open = isUnlocked(state, e.id), here = state.era === e.id;
+    const prevOpen = i === 0 || isUnlocked(state, ERAS[i - 1].id);
+    const faces = dexListOf(e).map((d) => `<span class="era-face ${d.kind} ${open ? '' : 'locked'}">${pxImg(d.sheet, 1)}</span>`).join('');
+    let action;
+    if (here) action = '<span class="era-here">📍 지금 여기</span>';
+    else if (open) action = `<button class="px-btn small go" data-travel="${e.id}">이동하기</button>`;
+    else if (!prevOpen) action = '<span class="muted small">🔒 앞 장소를 먼저 열어요</span>';
+    else action = `<div class="era-req">${eraReq(state, e).map((r) => `<div class="req ${r.ok ? 'ok' : ''}"><span>${r.ok ? '✅' : '⬜'} ${r.label}</span><i class="req-bar"><b style="width:${Math.min(100, (r.cur / r.need) * 100)}%"></b></i><small>${r.fmt(r.cur)} / ${r.fmt(r.need)}</small></div>`).join('')}</div>`;
+    return `<div class="era-card ${here ? 'here' : ''} ${open ? '' : 'locked'}">
+      <div class="era-top"><span class="era-ico">${open || prevOpen ? e.icon : '❔'}</span>
+        <div class="era-txt"><b>${open || prevOpen ? e.name : '??? 아직 모르는 곳'}</b><small>${open || prevOpen ? e.desc : ''}</small>
+        <small class="era-mod">💰 손님 지갑 ×${e.priceMult} · ⏳ 인내심 ×${e.patience}${e.vip ? ' · 👑 VIP 손님' : ''}</small></div></div>
+      <div class="era-faces">${faces}</div>
+      <div class="era-act">${action}</div>
+    </div>`;
+  }).join('');
+  return tabs + '<p class="small muted">조건을 채우면 새 장소가 열려요. 열린 장소는 영업 준비 때 언제든 오갈 수 있어요. 먼 장소일수록 손님이 돈을 많이 내요!</p>' + `<div class="era-list">${cards}</div>`;
+}
+function dexHtml() {
+  const total = ERAS.reduce((t, e) => t + dexListOf(e).length, 0);
+  const have = ERAS.reduce((t, e) => t + dexProgress(state, e).have, 0);
+  const rows = ERAS.map((e) => {
+    const p = dexProgress(state, e);
+    const cells = dexListOf(e).map((d) => {
+      const met = (state.dex || {})[d.sheet];
+      return `<div class="dex-cell ${met ? 'met' : ''} ${d.kind}">${pxImg(d.sheet, 2, met ? '' : 'silhouette')}<small>${met ? personName(d.sheet) : '???'}</small>${d.kind === 'vip' ? '<i>👑</i>' : d.kind === 'rowdy' ? '<i>😡</i>' : ''}</div>`;
+    }).join('');
+    const reward = p.done && !p.claimed ? `<button class="px-btn tiny go" data-claimdex="${e.id}">🎁 완성 보상 ${won(dexReward(e))}</button>` : p.claimed ? '<span class="done">🎁 보상 받음</span>' : `<span class="muted small">모두 모으면 ${won(dexReward(e))}</span>`;
+    return `<div class="dex-era"><div class="dex-head"><b>${e.icon} ${e.name}</b><span>${p.have}/${p.total}</span>${reward}</div><div class="dex-grid">${cells}</div></div>`;
+  }).join('');
+  return `<p class="small">지금까지 만난 손님 <b>${have}/${total}</b> · 손님이 자리에 앉으면 도감에 등록돼요.</p>${rows}`;
+}
+function announceUnlocks() {
+  const fresh = checkUnlocks(state);
+  for (const e of fresh) {
+    feed(`🌏 새 장소가 열렸어요: <b>${e.icon} ${e.name}</b>!`);
+    toast(`🌏 새 장소 열림! ${e.icon} ${e.name} — 🌏 시간여행에서 가 봐요!`);
+    sfx.play('perfect');
+  }
+  document.querySelector('[data-open="era"]')?.classList.toggle('new', fresh.length > 0 || document.querySelector('[data-open="era"]')?.classList.contains('new'));
+  if (fresh.length) persist();
+  return fresh;
 }
 
 function bindPanel() {
@@ -579,6 +649,25 @@ function bindPanel() {
       toast(n ? `🧺 재료 ${n}개를 골고루 샀어요!` : '더 살 수 없어요 (냉장고/자금 부족)');
       if (n) sfx.play('coin');
       persist(); refreshPrep();
+      return;
+    }
+    const tt = e.target.closest('[data-eratab]');
+    if (tt) { eraTab = tt.dataset.eratab; renderPanel(); return; }
+    const tv = e.target.closest('[data-travel]');
+    if (tv) {
+      const era = eraById(tv.dataset.travel);
+      if (!(await confirmBox(`${era.icon} <b>${era.name}</b>(으)로 시간여행할까요?<br><small>가게와 재료·직원은 그대로 함께 가요.</small>`))) return;
+      if (!travel(state, era.id)) return;
+      sfx.play('perfect');
+      toast(`🌀 ${era.icon} ${era.name}에 도착! 새로운 손님을 맞이해요.`);
+      feed(`🌀 시간여행: <b>${era.name}</b> (손님 지갑 ×${era.priceMult})`);
+      persist(); makeScene(state); updateHud('준비'); renderPanel();
+      return;
+    }
+    const cd = e.target.closest('[data-claimdex]');
+    if (cd) {
+      const m = claimDex(state, cd.dataset.claimdex);
+      if (m) { sfx.play('coin'); toast(`📖 도감 완성 보상 +${won(m)}! 🎁`); persist(); updateHud(); renderPanel(); }
       return;
     }
     if (e.target.closest('[data-expand]')) {
@@ -656,9 +745,10 @@ function endEdit() {
 function renderTray() {
   $('#tray').innerHTML = Object.entries(ITEMS).map(([type, it]) => {
     const inv = state.inventory[type] || 0;
-    return `<span class="tray-item ${layoutSelected === type ? 'selected' : ''} ${inv ? '' : 'empty'}" data-select="${type}" title="${it.name}: ${it.desc}">
-      ${pxImg(ITEM_PX[type], 1)}<b>${inv}</b><i class="buff">${it.buffText || ''}</i>
-      <button class="px-btn tiny" data-buyitem="${type}">${won(it.price)}</button>
+    const locked = it.era && !isUnlocked(state, it.era);
+    return `<span class="tray-item ${layoutSelected === type ? 'selected' : ''} ${inv ? '' : 'empty'} ${it.lux ? 'lux' : ''} ${locked ? 'locked' : ''}" data-select="${type}" title="${it.name}: ${it.desc}">
+      ${it.lux ? '<i class="lux-tag">💎</i>' : ''}${pxImg(ITEM_PX[type], 1)}<b>${locked ? '🔒' : inv}</b><i class="buff">${locked ? `${eraById(it.era).icon} ${eraById(it.era).short} 가 보면 열려요` : it.buffText || ''}</i>
+      ${locked ? '' : `<button class="px-btn tiny" data-buyitem="${type}">${won(it.price)}</button>`}
     </span>`;
   }).join('');
   $('#trayInfo').innerHTML = `칸 ${state.layout.length}/${gridOf(state).cols * gridOf(state).rows}<br><b>버프</b> ${buffSummary(state)}`;
@@ -801,6 +891,7 @@ async function init() {
   window.__chef = { get state() { return state; }, biz: null, engine, quiz, applyClassControl };
   initCloud().then((ok) => { if (ok) console.info('[ChefMaster] 학급 서버(Firebase) 연결됨'); });
   try { await Promise.all([loadSprites(), loadPx()]); } catch (e) { console.error('에셋 로드 실패', e); }
+  try { registerEraArt(); } catch (e) { console.error('시대 도트 등록 실패', e); }
   try { await document.fonts.load('12px Galmuri11'); } catch (e) { /* 폰트 없이도 동작 */ }
   initTitle();
   initLive({ scene: () => scene, toast, persist: () => { if (state) persist(true); }, logout: () => { if (state) logout(); } });

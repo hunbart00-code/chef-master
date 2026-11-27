@@ -1,7 +1,7 @@
 // 픽셀 에셋 로더 (assets/px) — 모든 그림을 같은 1배 픽셀 격자로 관리
-import { PX_SRC, PX_ROOM, PX } from './px-atlas.js?v=20261127001202';
-import { nativeDish } from './sprites.js?v=20261127001202';
-import { SHOP_LEVELS } from './shop-levels.js?v=20261127001202';
+import { PX_SRC, PX_ROOM, PX } from './px-atlas.js?v=20261127004038';
+import { nativeDish } from './sprites.js?v=20261127004038';
+import { SHOP_LEVELS } from './shop-levels.js?v=20261127004038';
 
 const cache = {};
 const urls = {};
@@ -74,6 +74,21 @@ export function walkFrame(name, k) {
  * 확장 단계별 방 이미지: PixelLab 방(256×256)을 잘라 이어 붙여 원하는 크기로 합성
  * 윗벽(돌+나무 벽판) / 원목 바닥(8px 줄 맞춤) / 아랫벽(왼쪽 아래 문틈)
  */
+/** 시대별 색 보정한 방 [r, g, b 곱하기, r, g, b 더하기] */
+export function roomTinted(level, tint) {
+  const base = roomFor(level);
+  if (!tint || !base) return base;
+  const key = `${level}|${tint.join(',')}`;
+  if (roomCache[key]) return roomCache[key];
+  const c = document.createElement('canvas'); c.width = base.width; c.height = base.height;
+  const g = c.getContext('2d');
+  g.drawImage(base, 0, 0);
+  const img = g.getImageData(0, 0, c.width, c.height), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { d[i] = d[i] * tint[0] + tint[3]; d[i + 1] = d[i + 1] * tint[1] + tint[4]; d[i + 2] = d[i + 2] * tint[2] + tint[5]; }
+  g.putImageData(img, 0, 0);
+  return (roomCache[key] = c);
+}
+
 export function roomFor(level) {
   if (roomCache[level]) return roomCache[level];
   const { w, h } = SHOP_LEVELS[level];
@@ -117,4 +132,8 @@ export const DISH_PX = {
   twigim: 'dish_twigim', eomuktang: 'dish_eomuktang',
 };
 
-export const ITEM_PX = { table_wood: 'table', table_long: 'table_long', plant_pot: 'plant', trophy: 'trophy', aboard: 'aboard', rug: 'rug', water: 'water', bookshelf: 'bookshelf' };
+export const ITEM_PX = {
+  table_wood: 'table', table_long: 'table_long', plant_pot: 'plant', trophy: 'trophy', aboard: 'aboard', rug: 'rug', water: 'water', bookshelf: 'bookshelf',
+  lux_toad: 'lux_toad', lux_aquarium: 'lux_aquarium', lux_piano: 'lux_piano', lux_fossil: 'lux_fossil', lux_goldcrown: 'lux_goldcrown',
+  lux_celadon: 'lux_celadon', lux_moonjar: 'lux_moonjar', lux_screen: 'lux_screen', lux_ufo: 'lux_ufo', lux_crystal: 'lux_crystal',
+};
