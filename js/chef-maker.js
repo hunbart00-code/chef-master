@@ -1,6 +1,6 @@
 // 셰프 꾸미기: 부위별 선택 → 4방향 도트 셰프를 즉석에서 그림 (외곽선·음영 자동)
 // 머리 모양·머리색·피부색·눈·입·안경·볼터치·앞치마 색
-import { setSprite, hasSprite } from './px.js?v=20261127011938';
+import { setSprite, hasSprite } from './px.js?v=20261127013038';
 
 export const CHEF_PARTS = {
   hair: ['긴 생머리', '단발 + 앞머리', '묶은 머리', '중단발', '바가지 머리', '짧은 머리', '삐죽 머리', '아주 짧은 머리'],

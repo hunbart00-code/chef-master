@@ -8,25 +8,25 @@ import {
   INGREDIENTS, MENUS, ITEMS, FRIDGE_LEVELS, RESCUE_BASE, RESCUE_PER_CORRECT, won,
   hireStaff, fireStaff, staffOf, totalWages, sellIngredient, clearFridge, missingHint, setSaveScope,
   expandShop, nextShopLevel, buffSummary,
-} from './shop-engine.js?v=20261127011938';
-import { SHOP_LEVELS, gridOf } from './shop-levels.js?v=20261127011938';
-import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js?v=20261127011938';
-import { liveKickGuest, liveClassControl, serverClosed, initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js?v=20261127011938';
-import { ERAS, eraOf, eraById, dexListOf, dexReward, MODERN_NAMES } from './data-eras.js?v=20261127011938';
-import { ensureEra, isUnlocked, eraReq, checkUnlocks, travel, dexProgress, claimDex } from './era-engine.js?v=20261127011938';
-import { registerEraArt, ERA_PEOPLE } from './era-art.js?v=20261127011938';
-import { initTitleBg, showTitleBg, dimTitleBg } from './title-bg.js?v=20261127011938';
-import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js?v=20261127011938';
-import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js?v=20261127011938';
-import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js?v=20261127011938';
-import { QuizEngine } from './quiz-engine.js?v=20261127011938';
-import { QuizUI } from './quiz-ui.js?v=20261127011938';
-import { Business } from './business.js?v=20261127011938';
-import { sfx } from './sfx.js?v=20261127011938';
-import { loadSprites, spriteImg } from './sprites.js?v=20261127011938';
-import { ING_SPRITE } from './sprite-atlas.js?v=20261127011938';
-import { loadPx, pxImg, DISH_PX, ITEM_PX } from './px.js?v=20261127011938';
-import { CHEF_PARTS, CHEF_PART_LABEL, defaultChefStyle, randomChefStyle, registerChef, chefSheetOf } from './chef-maker.js?v=20261127011938';
+} from './shop-engine.js?v=20261127013038';
+import { SHOP_LEVELS, gridOf } from './shop-levels.js?v=20261127013038';
+import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js?v=20261127013038';
+import { liveKickGuest, liveClassControl, serverClosed, initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js?v=20261127013038';
+import { ERAS, eraOf, eraById, dexListOf, dexReward, MODERN_NAMES } from './data-eras.js?v=20261127013038';
+import { ensureEra, isUnlocked, eraReq, checkUnlocks, travel, dexProgress, claimDex } from './era-engine.js?v=20261127013038';
+import { registerEraArt, ERA_PEOPLE } from './era-art.js?v=20261127013038';
+import { initTitleBg, showTitleBg, dimTitleBg } from './title-bg.js?v=20261127013038';
+import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js?v=20261127013038';
+import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js?v=20261127013038';
+import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js?v=20261127013038';
+import { QuizEngine } from './quiz-engine.js?v=20261127013038';
+import { QuizUI } from './quiz-ui.js?v=20261127013038';
+import { Business } from './business.js?v=20261127013038';
+import { sfx } from './sfx.js?v=20261127013038';
+import { loadSprites, spriteImg } from './sprites.js?v=20261127013038';
+import { ING_SPRITE } from './sprite-atlas.js?v=20261127013038';
+import { loadPx, pxImg, DISH_PX, ITEM_PX } from './px.js?v=20261127013038';
+import { CHEF_PARTS, CHEF_PART_LABEL, defaultChefStyle, randomChefStyle, registerChef, chefSheetOf } from './chef-maker.js?v=20261127013038';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];

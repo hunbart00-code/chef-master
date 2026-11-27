@@ -1,13 +1,13 @@
 // 친구 가게 방문(스냅샷) · 칭찬 스티커 방명록 · 홍보 버프 · 3종 랭킹
 // - 학급 서버(Firebase) 연결 전: 같은 기기에 있는 같은 반 계정 + 체험용 가상 친구 5명
 // - 3차에서 Firebase를 연결하면 이 파일의 저장소 부분만 Firestore(shops / guestbooks)로 바뀜
-import { isFirebaseEnabled } from './firebase-config.js?v=20261127011938';
-import { loadShopOf, fitLayout } from './shop-engine.js?v=20261127011938';
-import { classmatesOnDevice } from './account.js?v=20261127011938';
-import { cloudOn, cloudClassmates, cloudSendCheer, cloudGuestbook } from './cloud.js?v=20261127011938';
-import { ITEMS, FRIDGE_LEVELS } from './data-interior.js?v=20261127011938';
-import { staffTier } from './data-staff.js?v=20261127011938';
-import { SHOP_LEVELS } from './shop-levels.js?v=20261127011938';
+import { isFirebaseEnabled } from './firebase-config.js?v=20261127013038';
+import { loadShopOf, fitLayout } from './shop-engine.js?v=20261127013038';
+import { classmatesOnDevice } from './account.js?v=20261127013038';
+import { cloudOn, cloudClassmates, cloudSendCheer, cloudGuestbook } from './cloud.js?v=20261127013038';
+import { ITEMS, FRIDGE_LEVELS } from './data-interior.js?v=20261127013038';
+import { staffTier } from './data-staff.js?v=20261127013038';
+import { SHOP_LEVELS } from './shop-levels.js?v=20261127013038';
 
 const KEY = 'chefmaster_social_v1';
 export const CHEERS_PER_DAY = 3;
