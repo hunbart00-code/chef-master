@@ -12,8 +12,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="css/style.css?v=20261127010804">
-  <script src="js/open-in-chrome.js?v=20261127010804"></script>
+  <link rel="stylesheet" href="css/style.css?v=20261127011938">
+  <script src="js/open-in-chrome.js?v=20261127011938"></script>
 </head>
 <body>
   <div id="game">
@@ -25,6 +25,12 @@
 
     <!-- 메인 화면 배경 (포장마차) -->
     <canvas id="titleBg" hidden></canvas>
+
+    <!-- 처음 화면: 로고 + 게임 시작 -->
+    <div id="titleSplash" hidden>
+      <div class="ts-logo"><b>셰프 마스터</b><small>수학·영어로 요리하는 식당 타이쿤</small></div>
+      <button class="px-btn go big" id="btnStart">게임 시작 ▶</button>
+    </div>
 
     <!-- 왼쪽 위: 시계 다이얼 + 정보 바 -->
     <div id="hudTL" hidden>
@@ -187,6 +193,6 @@
 
   <div id="toast"></div>
 
-  <script type="module" src="js/main.js?v=20261127010804"></script>
+  <script type="module" src="js/main.js?v=20261127011938"></script>
 </body>
 </html>
