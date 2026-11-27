@@ -1,6 +1,6 @@
 // 퀴즈 엔진: 과목 비중, 적응형 난이도(기초→보통→도전), 중복 방지(최근 20문제), 오답 재출제, 정답률 통계
-import { generateMath, UNITS } from './math-g5.js?v=20261127013038';
-import { WORDS, DIALOGS, SENTENCES, PICTURES } from './data-english-g5.js?v=20261127013038';
+import { generateMath, UNITS } from './math-g5.js?v=20261127014359';
+import { WORDS, DIALOGS, SENTENCES, PICTURES } from './data-english-g5.js?v=20261127014359';
 
 const MEM_KEY = 'chefmaster_quiz_v1';
 const RECENT_MAX = 20;

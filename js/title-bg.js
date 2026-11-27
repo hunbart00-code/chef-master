@@ -1,6 +1,7 @@
 // 메인 화면 배경: 달밤 모닥불 포장마차 그림(458×256 도트) + 별·모닥불·초롱·반딧불 움직임
 // 처음에는 그림 + 로고 + '게임 시작' 버튼, 누르면 그림이 어두워지고 로그인 칸이 뜸
-const SRC = 'assets/px/title.png';
+const SRC = 'assets/px/title.png';            // 캐릭터 윗몸을 지운 배경
+const CHARS = 'assets/px/title_chars.png';    // 캐릭터 윗몸만 (투명 배경)
 const IW = 458, IH = 256;
 const FIRE = { x: 230, y: 205 };
 const LANTERNS = [[303, 43], [373, 41], [411, 46], [342, 66]];
@@ -9,14 +10,14 @@ const SKY = '#01011d', GROUND = '#04141c';
 // ---------- 캐릭터 움직임 (그림 좌표) ----------
 // body: 숨쉬기(아래 기준으로 위로 살짝 늘었다 줄었다), head: 냠냠 씹기, fan: 부채질, eyes: 눈 깜빡임(lid: 눈꺼풀 색 뽑을 곳)
 const ACTORS = [
-  { name: 'chef', body: [60, 86, 128, 197], breath: [0.011, 2.1, 0.0] },
-  { name: 'caveman', body: [129, 100, 190, 198], breath: [0.010, 2.5, 1.3], head: [129, 102, 190, 158], chew: [13, 0.6],
+  { name: 'chef', body: [62, 88, 131, 197], breath: [0.011, 2.1, 0.0] },
+  { name: 'caveman', body: [129, 103, 191, 198], breath: [0.010, 2.5, 1.3], head: [129, 103, 191, 158], chew: [13, 0.6],
     eyes: [[151, 133, 7, 6], [166, 133, 7, 6]], lid: [160, 138] },
-  { name: 'scholar', body: [203, 76, 262, 170], breath: [0.008, 1.7, 2.6], fan: [203, 137, 244, 163],
+  { name: 'scholar', body: [197, 78, 270, 170], breath: [0.008, 1.7, 2.6], fan: [203, 137, 244, 163],
     eyes: [[221, 125, 9, 5], [237, 125, 9, 5]], lid: [233, 128] },
-  { name: 'alien', body: [283, 112, 338, 190], breath: [0.012, 2.7, 4.0],
+  { name: 'alien', body: [284, 114, 338, 190], breath: [0.012, 2.7, 4.0],
     eyes: [[292, 135, 9, 9], [306, 134, 10, 10]], lid: [303, 131] },
-  { name: 'girl', body: [343, 118, 402, 200], breath: [0.010, 2.3, 5.1], head: [343, 120, 402, 158], chew: [12, 2.4] },
+  { name: 'girl', body: [338, 115, 403, 200], breath: [0.010, 2.3, 5.1], head: [338, 115, 403, 158], chew: [12, 2.4] },
 ];
 const STEAM = [[112, 171], [303, 165], [356, 169], [336, 82], [312, 90]];
 const lidColor = {};
@@ -24,11 +25,12 @@ const blinkAt = {};
 const steam = [];
 function sampleLids() {
   const c = document.createElement('canvas'); c.width = IW; c.height = IH;
-  const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+  const g = c.getContext('2d'); g.drawImage(chars || img, 0, 0);
   for (const a of ACTORS) if (a.lid) { const d = g.getImageData(a.lid[0], a.lid[1], 1, 1).data; lidColor[a.name] = `rgb(${d[0]},${d[1]},${d[2]})`; }
 }
 
 let img = null;
+let chars = null;
 let canvas = null;
 let raf = 0;
 let running = false;
@@ -41,7 +43,8 @@ const stars = Array.from({ length: 30 }, () => ({ x: Math.random() * IW, y: Math
 export async function initTitleBg() {
   canvas = document.getElementById('titleBg');
   if (!canvas) return;
-  img = await new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = SRC; });
+  const load = (src) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  [img, chars] = await Promise.all([load(SRC), load(CHARS)]);
   if (!img) return;
   try { sampleLids(); } catch (e) { /* ignore */ }
   window.addEventListener('resize', () => { if (running) draw(performance.now()); });
@@ -139,28 +142,32 @@ function draw(now) {
 function stretchY(g, X, Y, s, [x0, y0, x1], anchorSrc, anchorDst, sy) {
   const w = x1 - x0, h = anchorSrc - y0;
   const top = anchorDst - h * sy;
-  g.drawImage(img, x0, y0, w, h, X(x0), Y(top), w * s, (anchorDst - top) * s);
+  g.drawImage(chars, x0, y0, w, h, X(x0), Y(top), w * s, (anchorDst - top) * s);
 }
 function stretchX(g, X, Y, s, [x0, y0, x1, y1], anchorX, sx) {
   const w = anchorX - x0, h = y1 - y0;
   const left = anchorX - w * sx;
-  g.drawImage(img, x0, y0, w, h, X(left), Y(y0), (anchorX - left) * s, h * s);
+  g.drawImage(chars, x0, y0, w, h, X(left), Y(y0), (anchorX - left) * s, h * s);
 }
 
 function drawActors(g, t, X, Y, s) {
+  if (!chars) return;
   for (const a of ACTORS) {
     const [amp, rate, ph] = a.breath;
     const [x0, y0, x1, base] = a.body;
     const sb = 1 + amp * (0.5 + 0.5 * Math.sin(t * rate + ph));
-    stretchY(g, X, Y, s, [x0, y0, x1], base, base, sb);
-    // 냠냠: 몇 초마다 1.5초쯤 머리가 오물오물
-    if (a.head) {
+    // 냠냠: 몇 초마다 1.5초쯤 머리가 오물오물 (그때는 몸은 목 아래만, 머리는 따로 그려서 겹치지 않게)
+    const chewing = a.head && ((t + a.chew[1]) % 4) < 1.6;
+    if (chewing) {
       const [hx0, hy0, hx1, neck] = a.head;
-      const [crate, coff] = a.chew;
-      const chewing = ((t + coff) % 4) < 1.6;
-      const sc = chewing ? 1 + 0.03 * (0.5 + 0.5 * Math.sin(t * crate)) : 1;
       const neckDst = base - (base - neck) * sb;
-      if (chewing) stretchY(g, X, Y, s, [hx0, hy0, hx1], neck, neckDst, sc);
+      g.save(); g.beginPath(); g.rect(X(x0) - 2, Y(neckDst), (x1 - x0) * s + 4, (base - neckDst) * s + 2); g.clip();
+      stretchY(g, X, Y, s, [x0, y0, x1], base, base, sb);
+      g.restore();
+      const sc = 1 + 0.03 * (0.5 + 0.5 * Math.sin(t * a.chew[0]));
+      stretchY(g, X, Y, s, [hx0, hy0, hx1], neck, neckDst, sc);
+    } else {
+      stretchY(g, X, Y, s, [x0, y0, x1], base, base, sb);
     }
     // 부채질: 손잡이(오른쪽) 기준으로 부채가 살랑살랑
     if (a.fan) {

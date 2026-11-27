@@ -1,5 +1,5 @@
 // 시간여행 장소의 손님·사치품·장식 도트를 코드로 그려서 등록 (외곽선·음영 자동)
-import { setSprite, hasSprite } from './px.js?v=20261127013038';
+import { setSprite, hasSprite } from './px.js?v=20261127014359';
 
 // ---------- 공통: 글자 격자 → 픽셀 캔버스 ----------
 function shade(hex, f) {

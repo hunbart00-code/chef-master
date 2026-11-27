@@ -2,7 +2,7 @@
 // - 아틀라스(assets/sprites.png)의 각 영역을 개별 캔버스로 잘라 둡니다.
 // - 시트에 없는 캐릭터(손님·사장님·알바)와 튀김·어묵탕은 픽셀 템플릿으로 직접 그리고,
 //   1px 검은 외곽선 + 오른쪽/아래 음영 + 왼쪽 위 하이라이트를 자동으로 넣어 16비트 도트 느낌을 냅니다.
-import { ATLAS_SRC, RECTS } from './sprite-atlas.js?v=20261127013038';
+import { ATLAS_SRC, RECTS } from './sprite-atlas.js?v=20261127014359';
 
 const cache = {};
 const urlCache = {};

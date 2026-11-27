@@ -1,7 +1,7 @@
 // 퀴즈 팝업 UI: 3문제, 문제당 30초, 오답 1줄 해설
-import { renderMath } from './quiz-engine.js?v=20261127013038';
+import { renderMath } from './quiz-engine.js?v=20261127014359';
 
-import { GRADE, gradeFromCorrect } from './shop-engine.js?v=20261127013038';
+import { GRADE, gradeFromCorrect } from './shop-engine.js?v=20261127014359';
 
 const Q_TIME = 30;
 
