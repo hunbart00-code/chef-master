@@ -1,6 +1,6 @@
 // 시간여행 규칙: 장소 열기·이동·손님 도감
-import { ERAS, eraById, dexListOf, dexReward } from './data-eras.js?v=20261127004038';
-import { totalAssets } from './social-engine.js?v=20261127004038';
+import { ERAS, eraById, dexListOf, dexReward } from './data-eras.js?v=20261127005308';
+import { totalAssets } from './social-engine.js?v=20261127005308';
 
 /** 예전 저장에도 시간여행 칸 채우기 */
 export function ensureEra(s) {

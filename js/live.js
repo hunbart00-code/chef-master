@@ -2,9 +2,9 @@
 import {
   cloudOn, cloudPresence, cloudWatchPresence, cloudVisitStart, cloudVisitUpdate, cloudVisitEnd, cloudWatchVisits,
   cloudWatchChat, cloudSendChat, cloudWatchAnnounce, cloudAnnounce, cloudClassControl, cloudTeacherSignIn, cloudTeacherSignOut, ONLINE_MS,
-  cloudWatchServer, cloudSetServer, cloudResetCode, cloudClassShops, cloudWatchClass,
-} from './cloud.js?v=20261127004038';
-import { registerChef, chefSheetOf } from './chef-maker.js?v=20261127004038';
+  cloudWatchServer, cloudSetServer, cloudResetCode, cloudClassShops, cloudWatchClass, cloudWatchVisitDoc,
+} from './cloud.js?v=20261127005308';
+import { registerChef, chefSheetOf } from './chef-maker.js?v=20261127005308';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -32,8 +32,8 @@ let hooks = {};
 let server = { open: true, msg: '' };
 let chatOff = false;
 
-export function initLive({ scene, toast, persist, logout }) {
-  getScene = scene; toastFn = toast; hooks = { persist, logout };
+export function initLive({ scene, toast, persist, logout, onKicked }) {
+  getScene = scene; toastFn = toast; hooks = { persist, logout, onKicked };
   bindChat();
   // 교사 공지는 로그인 전에도 들음
   const startAnn = () => { unsub.announce(); unsub.announce = cloudWatchAnnounce(showAnnounce); cloudWatchServer(applyServer); };
@@ -96,11 +96,16 @@ export function liveVisitStart(friend) {
     getScene()?.syncGuests(friendGuests.map(guestView));
   });
   visit.beat = setInterval(() => cloudVisitUpdate(id, {}), 30000);
+  // 친구가 나를 내쫓으면
+  visit.unwatch = cloudWatchVisitDoc(id, (d) => { if (d?.state === 'kicked' && visit && !visit.kicked) { visit.kicked = true; hooks.onKicked?.(); } });
 }
+/** 내 가게에 온 친구 내쫓기 → 친구 화면에도 쫓겨나는 모습 */
+export function liveKickGuest(visitId) { if (visitId) cloudVisitUpdate(visitId, { state: 'kicked' }); }
 export function liveVisitSticker(text) { if (visit) cloudVisitUpdate(visit.id, { sticker: text, stickerAt: Date.now() }); }
 export function liveVisitEnd() {
   if (!visit) return;
   clearInterval(visit.beat);
+  visit.unwatch?.();
   cloudVisitEnd(visit.id);
   unsub.friendVisits(); unsub.friendVisits = () => {};
   friendGuests = [];

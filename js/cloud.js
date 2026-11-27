@@ -2,7 +2,7 @@
 // shops/{반-번호}      : 학생 가게 전체 (+ 이름, 코드 해시)
 // guestbooks/{자동ID}  : 칭찬 스티커 { to, from, sticker, at }
 // classes/{반}         : 교사 통제 { isPaused, subjectRatio, maxBranchUnlocked }
-import { firebaseConfig, isFirebaseEnabled } from './firebase-config.js?v=20261127004038';
+import { firebaseConfig, isFirebaseEnabled } from './firebase-config.js?v=20261127005308';
 
 const V = '10.12.2';
 let db = null;
@@ -108,6 +108,11 @@ export function cloudVisitUpdate(id, patch) {
 export function cloudVisitEnd(id) {
   if (!db || !id) return;
   F.deleteDoc(F.doc(db, 'visits', id)).catch(() => {});
+}
+/** 내 방문 문서 하나 지켜보기 (친구가 내쫓으면 state: 'kicked') */
+export function cloudWatchVisitDoc(id, cb) {
+  if (!db || !id) return () => {};
+  return F.onSnapshot(F.doc(db, 'visits', id), (snap) => cb(snap.exists() ? snap.data() : null), () => {});
 }
 /** 어떤 가게(to)에 와 있는 손님들 구독 */
 export function cloudWatchVisits(to, cb) {
