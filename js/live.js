@@ -3,8 +3,8 @@ import {
   cloudOn, cloudPresence, cloudWatchPresence, cloudVisitStart, cloudVisitUpdate, cloudVisitEnd, cloudWatchVisits,
   cloudWatchChat, cloudSendChat, cloudWatchAnnounce, cloudAnnounce, cloudClassControl, cloudTeacherSignIn, cloudTeacherSignOut, ONLINE_MS,
   cloudWatchServer, cloudSetServer, cloudResetCode, cloudClassShops, cloudWatchClass, cloudWatchVisitDoc,
-} from './cloud.js?v=20261127005434';
-import { registerChef, chefSheetOf } from './chef-maker.js?v=20261127005434';
+} from './cloud.js?v=20261127010804';
+import { registerChef, chefSheetOf } from './chef-maker.js?v=20261127010804';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

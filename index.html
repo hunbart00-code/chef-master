@@ -12,8 +12,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="css/style.css?v=20261127005434">
-  <script src="js/open-in-chrome.js?v=20261127005434"></script>
+  <link rel="stylesheet" href="css/style.css?v=20261127010804">
+  <script src="js/open-in-chrome.js?v=20261127010804"></script>
 </head>
 <body>
   <div id="game">
@@ -22,6 +22,9 @@
       <canvas id="pxCanvas"></canvas>
       <canvas id="uiCanvas" aria-label="가게 화면"></canvas>
     </div>
+
+    <!-- 메인 화면 배경 (포장마차) -->
+    <canvas id="titleBg" hidden></canvas>
 
     <!-- 왼쪽 위: 시계 다이얼 + 정보 바 -->
     <div id="hudTL" hidden>
@@ -184,6 +187,6 @@
 
   <div id="toast"></div>
 
-  <script type="module" src="js/main.js?v=20261127005434"></script>
+  <script type="module" src="js/main.js?v=20261127010804"></script>
 </body>
 </html>
