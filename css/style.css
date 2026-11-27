@@ -646,3 +646,41 @@ html.portrait .tile.word { width: auto; min-width: 40px; padding: 0 8px; font-si
 html.portrait .slot.word { width: auto; font-size: 17px; height: 34px; }
 html.portrait .tray-item { min-width: 78px; }
 html.portrait .tray-info { font-size: 9px; line-height: 1.2; white-space: normal; text-align: center; }
+
+/* ================= 상자 밖으로 삐져나오지 않게 (전체 점검) ================= */
+/* 아이콘 버튼: 이모지가 넓게 그려지는 기기(윈도우 등)에서도 버튼이 내용만큼 커짐 */
+.px-icon { width: auto; min-width: 34px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; font-size: 14px; }
+html.short .px-icon, html.portrait .px-icon { min-width: 30px; width: auto; padding: 0 4px; }
+.px-btn { overflow: hidden; }
+/* 날씨 칸: 글자가 길면 줄바꿈, 테두리와 여유 */
+.px-chip { max-width: 360px; padding-right: 12px; }
+.px-chip > span:last-child { min-width: 0; }
+.px-chip small { white-space: normal; }
+/* 가운데 카드(로그인·결산·선생님): 칸이 좁아도 버튼·글자가 눌려 찌그러지지 않게 */
+.center-card > * { flex-shrink: 0; }
+/* 재료 줄: 버튼은 줄어들지 않고 이름이 줄어듦 */
+.ing-row > .px-btn, .ing-row > img, .ing-row > .ing-have { flex: none; }
+.ing-name { min-width: 0; overflow: hidden; }
+html.short .ing-list { grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); }
+/* 가구 트레이: 설명 글자는 칸 안에서 줄바꿈, 트레이는 옆으로 밀기, 완료 버튼은 항상 보이게 */
+.tray-item { max-width: 104px; }
+.tray-item .buff { font-size: 10px; font-style: normal; white-space: normal; text-align: center; line-height: 1.2; max-width: 100%; }
+.tray-info { white-space: normal; max-width: 160px; }
+#bbEdit .tray { flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+#bbEdit #btnEditDone { flex: none; }
+@media (max-width: 1100px) { #bbEdit .bb-hint { display: none; } }
+/* 문장 순서 낱말 타일: 낱말 길이만큼 */
+html.short .tile.word { width: auto; min-width: 36px; padding: 0 8px; font-size: 16px; }
+/* 좁은 세로 화면: 채팅·로그아웃은 아이콘만 */
+@media (max-width: 400px) { html.portrait .lbl { display: none; } }
+/* 2차: 트레이 설명 줄바꿈, 버튼은 좁은 줄에서도 찌그러지지 않음 */
+.tray-item { flex: none; max-width: none; }
+.tray-item i.buff { white-space: normal; text-align: center; line-height: 1.2; max-width: 96px; }
+html.short .tray-item i.buff { max-width: 80px; font-size: 9px; }
+.px-btn { flex-shrink: 0; }
+.visit-who { min-width: 0; overflow: hidden; }
+.visit-who > * { overflow: hidden; text-overflow: ellipsis; }
+.staff-summary > span, .staff-summary > p { min-width: 0; }
+.tray-info { flex: none; width: 140px; }
+#trayInfo { flex: none; width: 130px; }
+html.short #trayInfo, html.portrait #trayInfo { width: 96px; font-size: 9px; }

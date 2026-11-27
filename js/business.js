@@ -5,10 +5,10 @@
 import {
   MENUS, ITEMS, GRADE, TIP_RATE, tablesOf, branchMenus, canCook, anyCookable,
   consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf, furnitureBuffs,
-} from './shop-engine.js?v=20261126233621';
-import { geometry, levelOf } from './shop-levels.js?v=20261126233621';
-import { px, roomFor, DISH_PX, ITEM_PX, hasSprite } from './px.js?v=20261126233621';
-import { chefSheetOf } from './chef-maker.js?v=20261126233621';
+} from './shop-engine.js?v=20261127001202';
+import { geometry, levelOf } from './shop-levels.js?v=20261127001202';
+import { px, roomFor, DISH_PX, ITEM_PX, hasSprite, walkFrame } from './px.js?v=20261127001202';
+import { chefSheetOf } from './chef-maker.js?v=20261127001202';
 
 export const DAY_LENGTH = 150;      // 실제 초 (2분 30초)
 const EAT_TIME = 4.0;
@@ -224,6 +224,47 @@ export class Business {
     else if (c.state === 'leave' && this.move(c, dt)) this.customers.splice(this.customers.indexOf(c), 1);
   }
 
+  // ---------- 진상 손님 끌어내기 (사장님·경비 공통) ----------
+  // 손님 바로 옆, 상이 없는 쪽에 딱 붙는 자리
+  grabSpot(c) {
+    const side = c.table.flip ? 1 : -1;
+    return { x: c.x + side * 9, y: c.y, side, row0: c.table.table?.gy === 0 };
+  }
+  // 그 자리로 가는 길: 앞줄 상이면 바 앞 통로에서 바로 내려가고, 아니면 통로로
+  toSpot(a, spot, isChef) {
+    if (spot.row0) {
+      const top = { x: spot.x, y: HALL_TOP };
+      return [...(isChef ? this.route(a, top) : this.walk(a, top)), spot];
+    }
+    return isChef ? this.route(a, spot) : this.walk(a, spot);
+  }
+  startDrag(a, c) {
+    this.stats.rowdyHandled++;
+    const t = c.table;
+    if (t) { t.cust = null; t.dish = null; }
+    c.state = 'dragged'; c.dragger = a; c.handledBy = null;
+    c.dragSide = c.x >= a.x ? 1 : -1;
+    a.dragging = c;
+    a.walkSpeed = a.walkSpeed || a.speed;
+    a.speed = Math.max(34, a.walkSpeed * 0.7);   // 끌고 가니까 조금 느리게
+    const dx = -c.dragSide * 5;                  // 문 쪽에서 손님이 문 가운데로 오게
+    a.path = [{ x: a.x, y: AISLE_Y }, { x: DOOR.x + dx, y: AISLE_Y }, { x: DOOR.x + dx, y: RH - 14 }];
+    this.float(c.x, c.y - 36, '나가 주세요!', '#ffd23f', null, true);
+    this.sfx?.play('tap');
+  }
+  endDrag(a) {
+    const c = a.dragging;
+    a.dragging = null;
+    a.speed = a.walkSpeed || a.speed;
+    if (!c) return;
+    c.dragger = null;
+    c.state = 'leave';
+    c.speed = 80;
+    c.path = [{ x: c.x, y: RH + 26 }];
+    this.float(c.x, c.y - 34, '퇴치 성공!', '#8cff86');
+    this.sfx?.play('clean');
+  }
+
   // ---------- 영업 시작 ----------
   startDay() {
     this.mode = 'business';
@@ -366,7 +407,7 @@ export class Business {
     const ddx = tgt.x - a.x, ddy = tgt.y - a.y;
     if (Math.abs(ddx) > 0.5) a.face = ddx < 0 ? -1 : 1;
     a.dir = Math.abs(ddx) > Math.abs(ddy) * 0.8 ? (ddx > 0 ? 'right' : 'left') : (ddy > 0 ? 'front' : 'back');
-    if (d <= step) { a.x = tgt.x; a.y = tgt.y; a.path.shift(); return !a.path.length; }
+    if (d <= step) { a.x = tgt.x; a.y = tgt.y; a.path.shift(); if (!a.path.length) { a.moving = false; return true; } return false; }
     a.x += (ddx / d) * step;
     a.y += (ddy / d) * step;
     return false;
@@ -509,6 +550,13 @@ export class Business {
           } else this.pay(c);
         }
         break;
+      case 'dragged': { // 붙잡혀서 같이 걸어감
+        const a = c.dragger;
+        if (!a) { c.state = 'leave'; c.path = this.exitPath(c); break; }
+        c.x = a.x + c.dragSide * 8; c.y = a.y + 0.5;
+        c.moving = a.moving; c.dir = a.dir; c.face = -c.dragSide;
+        break;
+      }
       case 'leave':
         if (this.move(c, dt)) this.customers.splice(this.customers.indexOf(c), 1);
         break;
@@ -530,7 +578,8 @@ export class Business {
           const c = ch.task.c;
           if (c.state !== 'rowdy') break;
           ch.mode = 'toRowdy';
-          ch.path = this.route(ch, { x: c.table.serve.x, y: c.table.serve.y });
+          ch.grab = this.grabSpot(c);
+          ch.path = this.toSpot(ch, ch.grab, true);
         } else if (ch.task.type === 'clean') {
           const t = ch.task.t;
           if (!t.trash) { t.reserved = false; break; }
@@ -543,29 +592,20 @@ export class Business {
         break;
       case 'toRowdy':
         if (ch.task.c.state !== 'rowdy') { ch.mode = 'returning'; ch.path = this.route(ch, CHEF_HOME); break; }
-        if (arrived) { ch.mode = 'calming'; ch.calmT = 0; ch.idleDir = ch.task.c.table.serve.face || 'back'; }
+        if (arrived) { ch.mode = 'calming'; ch.calmT = 0; ch.idleDir = ch.grab.side < 0 ? 'right' : 'left'; }
         break;
       case 'calming': {
         const c = ch.task.c;
         ch.calmT += dt;
         if (ch.calmT >= CALM_TIME) {
-          this.stats.rowdyHandled++;
-          // 손님과 나란히 문까지 걸어감
-          this.leave(c, false);
-          c.handledBy = null;
-          ch.walkSpeed = ch.speed;
-          ch.speed = c.speed;
-          const follow = c.path.slice(0, -1).map((p) => ({ x: p.x + 10, y: p.y }));
-          // 상 북쪽에 서 있었으면 상을 뚫지 말고 상 사이 통로로 돌아서 손님을 따라감
-          ch.path = follow.length ? [...this.walk(ch, follow[0]), ...follow.slice(1)] : [];
-          ch.path.push({ x: DOOR.x + 10, y: RH - 20 });
-          ch.mode = 'escorting';
+          this.startDrag(ch, c);
+          ch.mode = 'dragging';
         }
         break;
       }
-      case 'escorting':
+      case 'dragging':
         if (arrived) {
-          ch.speed = ch.walkSpeed || 120;
+          this.endDrag(ch);
           ch.mode = 'returning';
           ch.path = this.route(ch, CHEF_HOME);
         }
@@ -616,7 +656,7 @@ export class Business {
         }
         break;
       case 'toTrash':
-        if (arrived) { ch.mode = 'sweeping'; ch.sweepT = 0; ch.idleDir = 'back'; }
+        if (arrived) { ch.mode = 'sweeping'; ch.sweepT = 0; ch.idleDir = ch.task.t.serve.face || 'back'; } // 상 쪽을 보고 청소
         break;
       case 'sweeping':
         ch.sweepT += dt;
@@ -730,13 +770,14 @@ export class Business {
         const c = this.customers.find((x) => x.state === 'rowdy' && !x.handledBy);
         if (!c) break;
         c.handledBy = gd; gd.target = c; gd.mode = 'going';
-        gd.path = this.walk(gd, c.table.serve);
+        gd.grab = this.grabSpot(c);
+        gd.path = this.toSpot(gd, gd.grab, false);
         this.log(`🛡️ ${gd.def.name} 출동!`);
         break;
       }
       case 'going':
         if (!target || target.state !== 'rowdy') { gd.mode = 'returning'; gd.path = [gd.home]; break; }
-        if (arrived) { gd.mode = 'handling'; gd.workT = 0; }
+        if (arrived) { gd.mode = 'handling'; gd.workT = 0; gd.face = gd.grab.side < 0 ? 1 : -1; gd.idleDir = gd.grab.side < 0 ? 'right' : 'left'; }
         break;
       case 'handling':
         if (!target || target.state !== 'rowdy') { gd.mode = 'returning'; gd.path = [gd.home]; break; }
@@ -744,18 +785,18 @@ export class Business {
         if (gd.workT >= gd.def.work) {
           if (Math.random() < gd.def.success) {
             this.stats.rowdyHandled++;
-            this.float(target.x, target.y - 34, '퇴치 성공!', '#8cff86');
-            this.log(`🛡️ ${gd.def.name}: 진상 손님 퇴치 성공!`);
-            this.sfx?.play('clean');
-            target.handledBy = null;
-            this.leave(target, false);
-            gd.target = null; gd.mode = 'returning'; gd.path = [gd.home];
+            this.log(`🛡️ ${gd.def.name}: 진상 손님을 붙잡아 문밖으로!`);
+            this.startDrag(gd, target);
+            gd.target = null; gd.mode = 'dragging';
           } else {
             this.float(target.x, target.y - 34, '실패… 다시!', '#ff8a7a');
             this.sfx?.play('wrong');
             gd.workT = -1.0;
           }
         }
+        break;
+      case 'dragging':
+        if (arrived) { this.endDrag(gd); gd.mode = 'returning'; gd.path = this.walk(gd, gd.home); }
         break;
       case 'returning':
         if (arrived || this.customers.some((x) => x.state === 'rowdy' && !x.handledBy)) gd.mode = 'idle';
@@ -928,8 +969,8 @@ export class Business {
   float(x, y, text, color, icon, big = false, delay = 0) { this.floats.push({ x, y, text, color, icon, big, life: -delay, max: 1.7 }); }
 
   // ---------- 그리기 ----------
-  spr(name, x, y, flip = false) {
-    const s = px(name);
+  spr(name, x, y, flip = false) { this.sprC(px(name), x, y, flip); }
+  sprC(s, x, y, flip = false) {
     if (!s) return;
     const g = this.px;
     const dx = Math.round(x - s.width / 2 + this.ox), dy = Math.round(y - s.height + this.oy);
@@ -1074,12 +1115,18 @@ export class Business {
       g.drawImage(s, Math.round(a.x - s.width / 2 + this.ox + shake), Math.round(a.y - s.height + this.oy + bob + (seated ? 2 : 0)));
       return;
     }
-    if (a.kind === 'dir4') this.spr(`${a.sheet}_${moving ? a.dir : (a.idleDir || 'front')}`, a.x + shake, a.y + bob);
+    const step = Math.floor(a.t * 8) % 2;   // 걸음 박자 (몸이 들썩이는 박자와 같음)
+    if (a.kind === 'dir4') {
+      const nm = `${a.sheet}_${moving && !seated ? a.dir : seated ? 'front' : (a.idleDir || 'front')}`;  // 앉으면 앞(화면 쪽)을 보고 먹기
+      if (moving && !seated) this.sprC(walkFrame(nm, step) || px(nm), a.x + shake, a.y + bob);
+      else this.spr(nm, a.x + shake, a.y + bob);
+    }
     else if (a.mode === 'sweeping') {
       // 빗자루질: 좌우로 몸을 돌리며 쓱싹쓱싹 (0.18초마다 방향 전환)
       const k = Math.floor(a.sweepT / 0.18) % 2;
       this.spr(a.sheet, a.x + (k ? -2 : 2), a.y - (Math.floor(a.sweepT / 0.09) % 2), !!k);
-    } else this.spr(a.sheet, a.x + shake, a.y + bob + (seated ? 2 : 0), a.face < 0);
+    } else if (moving && !seated) this.sprC(walkFrame(a.sheet, step) || px(a.sheet), a.x + shake, a.y + bob, a.face < 0);
+    else this.spr(a.sheet, a.x + shake, a.y + bob + (seated ? 2 : 0), a.face < 0);
   }
 
   carry(a) {

@@ -12,8 +12,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="css/style.css?v=20261126233621">
-  <script src="js/open-in-chrome.js?v=20261126233621"></script>
+  <link rel="stylesheet" href="css/style.css?v=20261127001202">
+  <script src="js/open-in-chrome.js?v=20261127001202"></script>
 </head>
 <body>
   <div id="game">
@@ -35,11 +35,11 @@
     <!-- 오른쪽 위: 예보 + 버튼 -->
     <div id="hudTR" hidden>
       <div class="px-chip" id="forecastChip"></div>
-      <button class="px-btn small chat-btn" id="btnChat" title="반 채팅">💬 채팅<b id="chatBadge" hidden>0</b></button>
+      <button class="px-btn small chat-btn" id="btnChat" title="반 채팅">💬<span class="lbl"> 채팅</span><b id="chatBadge" hidden>0</b></button>
       <button class="px-icon" id="btnSound" title="소리">🔊</button>
       <button class="px-icon" id="btnFull" title="전체화면">⛶</button>
       <button class="px-icon" id="btnHelp" title="도움말">?</button>
-      <button class="px-btn small" id="btnLogout" title="로그아웃">🚪 로그아웃</button>
+      <button class="px-btn small" id="btnLogout" title="로그아웃">🚪<span class="lbl"> 로그아웃</span></button>
     </div>
 
     <!-- 영업 일지 (잠깐 떴다 사라짐) -->
@@ -73,6 +73,7 @@
       <div class="bb-row" id="bbEdit" hidden>
         <span class="bb-hint">가구를 고르고 가게 바닥의 빈 칸을 누르세요. 놓인 가구를 누르면 창고로!</span>
         <span class="tray" id="tray"></span>
+        <span class="tray-info" id="trayInfo"></span>
         <button class="px-btn go small" id="btnEditDone">완료</button>
       </div>
     </div>
@@ -180,6 +181,6 @@
 
   <div id="toast"></div>
 
-  <script type="module" src="js/main.js?v=20261126233621"></script>
+  <script type="module" src="js/main.js?v=20261127001202"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // 픽셀 에셋 로더 (assets/px) — 모든 그림을 같은 1배 픽셀 격자로 관리
-import { PX_SRC, PX_ROOM, PX } from './px-atlas.js?v=20261126233621';
-import { nativeDish } from './sprites.js?v=20261126233621';
-import { SHOP_LEVELS } from './shop-levels.js?v=20261126233621';
+import { PX_SRC, PX_ROOM, PX } from './px-atlas.js?v=20261127001202';
+import { nativeDish } from './sprites.js?v=20261127001202';
+import { SHOP_LEVELS } from './shop-levels.js?v=20261127001202';
 
 const cache = {};
 const urls = {};
@@ -26,6 +26,49 @@ export const px = (name) => cache[name] || null;
 export const hasSprite = (name) => !!cache[name];
 export function setSprite(name, canvas) { cache[name] = canvas; delete urls[name]; }
 export const room = () => roomImg;
+
+// ---------- 걷기 모션: 서 있는 그림에서 두 걸음 그림을 자동으로 만듦 ----------
+// k=0: 왼발을 1픽셀 들어 올림, k=1: 오른발. 다리 = 그림 맨 아래 약 22% (3~7줄)
+const walkCache = {};
+export function walkFrame(name, k) {
+  const key = `${name}|${k}`;
+  if (key in walkCache) return walkCache[key];
+  const src = cache[name];
+  if (!src) return (walkCache[key] = null);
+  const w = src.width, h = src.height;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0);
+  const img = g.getImageData(0, 0, w, h), d = img.data;
+  const op = (x, y) => d[(y * w + x) * 4 + 3] > 40;
+  const rowHas = (y) => { for (let x = 0; x < w; x++) if (op(x, y)) return true; return false; };
+  let bottom = h - 1; while (bottom > 0 && !rowHas(bottom)) bottom--;
+  let top = 0; while (top < bottom && !rowHas(top)) top++;
+  const legH = Math.max(3, Math.min(7, Math.round((bottom - top + 1) * 0.22)));
+  const lift = bottom - top + 1 >= 22 ? 2 : 1;   // 큰 캐릭터는 발을 2픽셀 들어 걸음이 잘 보이게
+  const legTop = bottom - legH + 1;
+  let minX = w, maxX = -1;
+  for (let y = legTop; y <= bottom; y++) for (let x = 0; x < w; x++) if (op(x, y)) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); }
+  if (maxX - minX < 3) return (walkCache[key] = null);
+  const mid = (minX + maxX) / 2;
+  const side = (x) => (k === 0 ? x < mid - 0.25 : x > mid + 0.25);
+  const at = (x, y) => (y * w + x) * 4;
+  // 한쪽 다리를 위로 1픽셀 (위쪽 줄부터 차례로 옮겨서 덮어쓰기 꼬임 방지)
+  const orig = new Uint8ClampedArray(d);
+  for (let x = minX; x <= maxX; x++) {
+    if (!side(x)) continue;
+    // 다리 줄을 lift만큼 위로 (원본에서 읽어서 옮김), 맨 아래 lift줄은 비움
+    for (let y = legTop - lift; y <= bottom; y++) {
+      const sy = y + lift, t0 = at(x, y);
+      if (sy <= bottom) { const s0 = at(x, sy); if (orig[s0 + 3] > 40 || y >= legTop) for (let i = 0; i < 4; i++) d[t0 + i] = orig[s0 + i]; }
+      else d[t0 + 3] = 0;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return (walkCache[key] = c);
+}
+
 
 /**
  * 확장 단계별 방 이미지: PixelLab 방(256×256)을 잘라 이어 붙여 원하는 크기로 합성
