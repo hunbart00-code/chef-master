@@ -8,24 +8,24 @@ import {
   INGREDIENTS, MENUS, ITEMS, FRIDGE_LEVELS, RESCUE_BASE, RESCUE_PER_CORRECT, won,
   hireStaff, fireStaff, staffOf, totalWages, sellIngredient, clearFridge, missingHint, setSaveScope,
   expandShop, nextShopLevel, buffSummary,
-} from './shop-engine.js?v=20261127005308';
-import { SHOP_LEVELS, gridOf } from './shop-levels.js?v=20261127005308';
-import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js?v=20261127005308';
-import { liveKickGuest, liveClassControl, serverClosed, initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js?v=20261127005308';
-import { ERAS, eraOf, eraById, dexListOf, dexReward, MODERN_NAMES } from './data-eras.js?v=20261127005308';
-import { ensureEra, isUnlocked, eraReq, checkUnlocks, travel, dexProgress, claimDex } from './era-engine.js?v=20261127005308';
-import { registerEraArt, ERA_PEOPLE } from './era-art.js?v=20261127005308';
-import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js?v=20261127005308';
-import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js?v=20261127005308';
-import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js?v=20261127005308';
-import { QuizEngine } from './quiz-engine.js?v=20261127005308';
-import { QuizUI } from './quiz-ui.js?v=20261127005308';
-import { Business } from './business.js?v=20261127005308';
-import { sfx } from './sfx.js?v=20261127005308';
-import { loadSprites, spriteImg } from './sprites.js?v=20261127005308';
-import { ING_SPRITE } from './sprite-atlas.js?v=20261127005308';
-import { loadPx, pxImg, DISH_PX, ITEM_PX } from './px.js?v=20261127005308';
-import { CHEF_PARTS, CHEF_PART_LABEL, defaultChefStyle, randomChefStyle, registerChef, chefSheetOf } from './chef-maker.js?v=20261127005308';
+} from './shop-engine.js?v=20261127005434';
+import { SHOP_LEVELS, gridOf } from './shop-levels.js?v=20261127005434';
+import { tryLogin, createAccount, lastLogin, hash, accountId, rememberServerAccount } from './account.js?v=20261127005434';
+import { liveKickGuest, liveClassControl, serverClosed, initLive, liveLogin, liveLogout, liveMode, liveSceneReady, liveVisitStart, liveVisitSticker, liveVisitEnd, isOnline, presenceOf } from './live.js?v=20261127005434';
+import { ERAS, eraOf, eraById, dexListOf, dexReward, MODERN_NAMES } from './data-eras.js?v=20261127005434';
+import { ensureEra, isUnlocked, eraReq, checkUnlocks, travel, dexProgress, claimDex } from './era-engine.js?v=20261127005434';
+import { registerEraArt, ERA_PEOPLE } from './era-art.js?v=20261127005434';
+import { initCloud, cloudOn, cloudGetShop, cloudSaveShop, cloudRefreshClass, cloudWatchClass } from './cloud.js?v=20261127005434';
+import { syncGuestbook, STICKERS, stickerById, listClassmates, cheersLeftToday, cheeredToday, sendCheer, guestbookOf, pullIncomingCheers, ranking, RANKINGS, isDemo, CHEERS_PER_DAY } from './social-engine.js?v=20261127005434';
+import { STAFF_ROLES, STAFF_ORDER, speedStars } from './data-staff.js?v=20261127005434';
+import { QuizEngine } from './quiz-engine.js?v=20261127005434';
+import { QuizUI } from './quiz-ui.js?v=20261127005434';
+import { Business } from './business.js?v=20261127005434';
+import { sfx } from './sfx.js?v=20261127005434';
+import { loadSprites, spriteImg } from './sprites.js?v=20261127005434';
+import { ING_SPRITE } from './sprite-atlas.js?v=20261127005434';
+import { loadPx, pxImg, DISH_PX, ITEM_PX } from './px.js?v=20261127005434';
+import { CHEF_PARTS, CHEF_PART_LABEL, defaultChefStyle, randomChefStyle, registerChef, chefSheetOf } from './chef-maker.js?v=20261127005434';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -381,12 +381,12 @@ function bindCustomizer(root, get, set) {
 }
 
 // ---------- 👟 친구 내쫓기 ----------
-const KICK_MIN = 10;
+const KICK_SEC = 5;   // 쫓겨나면 이 시간 동안 그 가게에 못 감
 const banKey = () => `chefmaster_kickban_v1:${state?.accountId || ''}`;
 const loadBans = () => { try { return JSON.parse(localStorage.getItem(banKey())) || {}; } catch (e) { return {}; } };
 const banLeft = (id) => Math.max(0, (loadBans()[id] || 0) - Date.now());
 async function kickFriend(c) {
-  if (!(await confirmBox(`<b>${c.visitorName}</b>을(를) 가게 밖으로 내쫓을까요? 👟<br><small>잡아서 문밖으로 뻥! ${KICK_MIN}분 동안 다시 못 와요.</small>`))) return;
+  if (!(await confirmBox(`<b>${c.visitorName}</b>을(를) 가게 밖으로 내쫓을까요? 👟<br><small>잡아서 문밖으로 뻥! ${KICK_SEC}초 동안 다시 못 와요.</small>`))) return;
   if (!scene?.kickGuest(c)) return;
   liveKickGuest(c.guestId);
   toast(`👟 ${c.visitorName} 내쫓는 중!`);
@@ -404,10 +404,10 @@ function afterKicked() {
   const f = kickedFrom || visiting;
   kickedFrom = null;
   if (!f || !state) return;
-  const bans = loadBans(); bans[f.id] = Date.now() + KICK_MIN * 60000;
+  const bans = loadBans(); bans[f.id] = Date.now() + KICK_SEC * 1000;
   try { localStorage.setItem(banKey(), JSON.stringify(bans)); } catch (e) { /* ignore */ }
   enterPrep();
-  toast(`😵 ${f.name}네 가게에서 쫓겨났어요! ${KICK_MIN}분 뒤에 다시 갈 수 있어요.`);
+  toast(`😵 ${f.name}네 가게에서 쫓겨났어요! ${KICK_SEC}초 뒤에 다시 갈 수 있어요.`);
 }
 
 // ---------- 친구 가게 ----------
@@ -421,7 +421,7 @@ function friendsHtml() {
       ${pxImg(`${chefSheetOf(f)}_front`, 2)}
       <div class="fr-info"><b>${isOnline(f.id) ? '<i class="online-dot"></i>' : ''}${f.name}</b>${f.demo ? ' <span class="tag">체험</span>' : ''}${isOnline(f.id) ? `<span class="f-status">${{ biz: '🔥 영업 중', prep: '🧺 준비 중', visit: '🚶 놀러 나감' }[presenceOf(f.id)?.mode] || '접속 중'}</span>` : ''}<small>DAY ${f.day} · ★ ${(f.rating || 0).toFixed(1)} · 완벽 ${f.perfectCookCount || 0}</small></div>
       ${cheeredToday(state, f.id) ? '<span class="done">💌 응원함</span>' : ''}
-      ${banLeft(f.id) ? `<span class="muted small">🚫 ${Math.ceil(banLeft(f.id) / 60000)}분</span>` : `<button class="px-btn tiny go" data-visit="${f.id}">놀러가기</button>`}
+      ${banLeft(f.id) ? `<span class="muted small">🚫 ${Math.ceil(banLeft(f.id) / 1000)}초</span>` : `<button class="px-btn tiny go" data-visit="${f.id}">놀러가기</button>`}
     </div>`).join('');
   return `
     <div class="social-head">
@@ -450,7 +450,7 @@ function visitFriend(id) {
   const f = listClassmates(state).find((x) => x.id === id);
   if (!f) return;
   const left = banLeft(f.id);
-  if (left) { toast(`🚫 ${f.name}네 가게에서 쫓겨났어요. ${Math.ceil(left / 60000)}분 뒤에 갈 수 있어요.`); return; }
+  if (left) { toast(`🚫 ${f.name}네 가게에서 쫓겨났어요. ${Math.ceil(left / 1000)}초 뒤에 갈 수 있어요.`); return; }
   closePanel();
   visiting = f;
   makeScene({ ...f, forecast: { id: 'sunny', day: f.day }, fridge: f.fridge || { level: 0, capacity: 20, items: {} }, inventory: f.inventory || {}, today: { expense: 0 } });
