@@ -5,12 +5,12 @@
 import {
   MENUS, ITEMS, GRADE, TIP_RATE, tablesOf, branchMenus, canCook, anyCookable,
   consume, menuPrice, gradeFromCorrect, currentForecast, newDayStats, won, staffOf, furnitureBuffs,
-} from './shop-engine.js?v=20261127020605';
-import { geometry, levelOf } from './shop-levels.js?v=20261127020605';
-import { px, roomFor, roomTinted, DISH_PX, ITEM_PX, hasSprite, walkFrame } from './px.js?v=20261127020605';
-import { chefSheetOf } from './chef-maker.js?v=20261127020605';
-import { eraOf, ERAS } from './data-eras.js?v=20261127020605';
-import { recordDex, ensureEra } from './era-engine.js?v=20261127020605';
+} from './shop-engine.js?v=20261127021108';
+import { geometry, levelOf } from './shop-levels.js?v=20261127021108';
+import { px, roomFor, roomTinted, DISH_PX, ITEM_PX, hasSprite, walkFrame } from './px.js?v=20261127021108';
+import { chefSheetOf } from './chef-maker.js?v=20261127021108';
+import { eraOf, ERAS } from './data-eras.js?v=20261127021108';
+import { recordDex, ensureEra } from './era-engine.js?v=20261127021108';
 
 export const DAY_LENGTH = 150;      // 실제 초 (2분 30초)
 const EAT_TIME = 4.0;
@@ -1465,7 +1465,9 @@ export class Business {
       // 주문 대기 손님: 머리 위 음식을 누르라는 안내 (처음 며칠, 또는 오래 기다리는 손님)
       for (const c of this.customers) {
         if (c.state !== 'order') continue;
-        this.hintText(g, X(c.x), Y(this.headY(c) - 30) + bob, '👇 클릭하세요!', '#ffe066');
+        // 인내심 게이지 바로 위에 딱 붙여서 (게이지 테두리 위 1픽셀)
+        const fs = Math.round(13 * this.dpr * Math.max(1, this.s / 3));
+        this.hintText(g, X(c.x), Y(this.headY(c) - 21) - fs * 0.55 + bob, '클릭하세요!', '#ffe066');
       }
       for (const c of this.customers) {
         if (c.state !== 'rowdy' || this.busy?.target === c) continue;
